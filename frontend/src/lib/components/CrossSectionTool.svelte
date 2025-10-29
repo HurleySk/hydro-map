@@ -1,23 +1,24 @@
 <script lang="ts">
-	import { activeTool, crossSection, crossSectionLine } from '$lib/stores';
-	import { get } from 'svelte/store';
-	import CrossSectionChart from './CrossSectionChart.svelte';
+import { activeTool, crossSection, crossSectionLine } from '$lib/stores';
+import { get } from 'svelte/store';
+import CrossSectionChart from './CrossSectionChart.svelte';
 
-	let isActive = false;
-	let linePoints: [number, number][] = [];
+let linePoints: [number, number][] = [];
 
-	$: linePoints = $crossSectionLine;
+$: linePoints = $crossSectionLine;
+$: isActive = $activeTool === 'cross-section';
+$: if (!isActive && linePoints.length) {
+    crossSectionLine.set([]);
+    crossSection.set(null);
+}
 
-	function toggleTool() {
-		isActive = !isActive;
-		activeTool.set(isActive ? 'cross-section' : 'none');
-		if (!isActive) {
-			clearLine();
-		} else {
-			crossSectionLine.set([]);
-			crossSection.set(null);
-		}
-	}
+function toggleTool() {
+    activeTool.set(isActive ? 'none' : 'cross-section');
+    if (!isActive) {
+        crossSectionLine.set([]);
+        crossSection.set(null);
+    }
+}
 
 	function clearLine() {
 		crossSectionLine.set([]);

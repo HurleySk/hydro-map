@@ -96,7 +96,30 @@ python scripts/prepare_streams.py \
 
 **Processing time**: ~1-3 minutes
 
-### 4. Generate Web Tiles
+### 4. Generate Contours (Optional)
+
+Generate elevation contour lines from the DEM:
+
+```bash
+gdal_contour -a elevation -i 10 \
+  data/processed/dem/filled_dem.tif \
+  data/processed/contours.gpkg
+```
+
+**Parameters**:
+- `-a elevation`: Attribute name for elevation values
+- `-i 10`: Contour interval in meters (adjust based on terrain)
+
+**Common intervals**:
+- Flat terrain: 5-10m
+- Moderate terrain: 10-20m
+- Mountainous: 20-50m
+
+**Output**: `data/processed/contours.gpkg` - Contour lines with elevation attribute
+
+**Processing time**: ~30 seconds - 2 minutes
+
+### 5. Generate Web Tiles
 
 Convert rasters and vectors to PMTiles for web serving:
 
@@ -118,11 +141,17 @@ python scripts/generate_tiles.py \
 - `slope.pmtiles`
 - `aspect.pmtiles`
 - `streams.pmtiles`
+- `contours.pmtiles` (if contours were generated)
 
 **Note**: This script requires external tools:
-- **GDAL** (`gdal_translate`, `gdal2tiles.py`)
+- **GDAL** (`gdal_translate`, `gdal2tiles.py`, `gdal_contour`)
 - **Tippecanoe** (for vector tiles)
-- **PMTiles CLI** (for final conversion)
+- **mb-util** (Python package for MBTiles manipulation)
+- **PMTiles CLI** (for final conversion to PMTiles format)
+
+**IMPORTANT**: The tile generation workflow is:
+1. Rasters: DEM → XYZ tiles (gdal2tiles) → MBTiles (mb-util) → PMTiles (pmtiles convert)
+2. Vectors: GeoPackage → GeoJSON (ogr2ogr) → MBTiles (tippecanoe) → PMTiles (pmtiles convert)
 
 See [Installing Tools](#installing-required-tools) below.
 
@@ -187,6 +216,18 @@ Already included in `backend/requirements.txt`:
 ```bash
 pip install whitebox
 ```
+
+### mb-util (Python package)
+
+Required for XYZ to MBTiles conversion. Install in backend venv:
+
+```bash
+cd backend
+source venv/bin/activate
+pip install mbutil
+```
+
+**Note**: mb-util is NOT available via Homebrew. Must be installed as a Python package.
 
 ### GDAL
 

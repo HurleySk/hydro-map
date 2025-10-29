@@ -30,9 +30,9 @@ let unsubscribeCrossSection: () => void = () => {};
 let unsubscribeOutlets: () => void = () => {};
 let unsubscribeBasemap: () => void = () => {};
 
-	// Default center (adjust to your area of interest)
-	const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749]; // San Francisco
-	const DEFAULT_ZOOM = 11;
+	// Default center (adjusted to Mason District Park, Annandale, VA)
+	const DEFAULT_CENTER: [number, number] = [-77.204, 38.836];
+	const DEFAULT_ZOOM = 14;
 
 	onMount(() => {
 		// Register PMTiles protocol

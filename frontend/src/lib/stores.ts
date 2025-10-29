@@ -52,7 +52,7 @@ export const layers = writable<LayersState>({
 	slope: { visible: false, opacity: 0.7 },
 	aspect: { visible: false, opacity: 0.7 },
 	streams: { visible: true, opacity: 1.0 },
-	geology: { visible: false, opacity: 0.7 },
+	// geology: { visible: false, opacity: 0.7 },  // No geology data available
 	contours: { visible: false, opacity: 0.8 },
 });
 

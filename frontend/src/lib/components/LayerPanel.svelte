@@ -3,8 +3,8 @@
 
 	const layerGroups: Record<string, string[]> = {
 		'Terrain': ['hillshade', 'slope', 'aspect'],
-		'Hydrology': ['streams'],
-		'Geology': ['geology', 'contours']
+		'Hydrology': ['streams', 'contours']
+		// 'Geology': ['geology']  // No geology data available
 	};
 
 	const layerNames: Record<string, string> = {
@@ -12,7 +12,7 @@
 		slope: 'Slope',
 		aspect: 'Aspect',
 		streams: 'Stream Network',
-		geology: 'Geology',
+		// geology: 'Geology',  // No geology data available
 		contours: 'Contours'
 	};
 

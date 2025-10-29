@@ -75,6 +75,11 @@ async def delineate(request: DelineationRequest):
             }
 
         # Step 2: Check cache
+        # Cache key includes all parameters that affect delineation:
+        # - Snapped coordinates (6 decimal places ~11cm precision)
+        # - snap_to_stream flag (affects snapping behavior)
+        # - snap_radius (affects which stream is snapped to)
+        # If adding new delineation options, include them in the cache key
         snapped_lat = snapped_point['geometry']['coordinates'][1]
         snapped_lon = snapped_point['geometry']['coordinates'][0]
         cache_key = (

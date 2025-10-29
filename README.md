@@ -112,13 +112,20 @@ Before running the application, you need to prepare your data:
    python scripts/generate_tiles.py \
      --data-dir data/processed \
      --output-dir data/tiles \
-     --min-zoom 8 \
-     --max-zoom 14
+     --min-zoom 10 \
+     --max-zoom 16
    ```
 
 4. **(Optional) Add geology data**
    - Download geology layers from [USGS](https://mrdata.usgs.gov/geology/state/)
    - Convert to GeoPackage: `ogr2ogr -f GPKG data/processed/geology.gpkg geology.shp`
+
+> **Tip:** after generating tiles, verify that the backend can see them:
+> ```bash
+> curl -I http://localhost:8000/tiles/hillshade.pmtiles
+> curl -I http://localhost:8000/tiles/streams.pmtiles
+> ```
+> A `200 OK` response (with `Accept-Ranges: bytes`) confirms the files are in place and will render when toggled in the map.
 
 ### Running the Application
 
@@ -138,7 +145,7 @@ npm run dev
 # Frontend runs on http://localhost:5173
 ```
 
-Open http://localhost:5173 in your browser.
+Open http://localhost:5173 in your browser. The map boots focused on Mason District Park (Annandale, VA); adjust `mapView` in local storage or `DEFAULT_CENTER` in `Map.svelte` if your study area differs.
 
 #### Option 2: Docker Compose
 
@@ -185,6 +192,24 @@ Use the **Layers** panel to:
 Click **Feature Info** mode and click the map to see attributes of:
 - Nearby streams (name, order, length)
 - Geology at the point (formation, rock type, age)
+
+### Basemap & Visibility Tools
+
+- Switch between the default color basemap and a light-gray background via the **Basemap** panel for better overlay contrast.
+- The layer checklist reflects live MapLibre state—if toggling a layer has no visual effect, confirm the PMTiles exist for the current extent (see troubleshooting below).
+
+### Layer Visibility Checklist
+
+If overlays appear unchanged:
+
+1. **Tiles reachable?**  
+   Check DevTools → Network for `/tiles/*.pmtiles` requests. A `404` or `502` means the backend isn’t serving the files.
+2. **Coverage matches AOI?**  
+   Pan to the default start location (Mason District Park, Annandale, VA). If tiles were generated elsewhere, rebuild them for this extent.
+3. **Vector layer names**  
+   Run `pmtiles info data/tiles/streams.pmtiles` and ensure the layer name is `streams` (matching the map source-layer).
+
+Re-run the preprocessing scripts or regenerate PMTiles as needed; restarting the backend will reload new files automatically.
 
 ## API Endpoints
 

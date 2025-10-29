@@ -2,12 +2,13 @@
 """
 Generate PMTiles from processed raster and vector data.
 
-This script uses external tools (gdal2tiles, tippecanoe) to create PMTiles
+This script uses external tools (gdal2tiles, tippecanoe, mb-util) to create PMTiles
 for client-side rendering with MapLibre GL JS.
 
 Prerequisites:
     - GDAL (gdal2tiles.py, gdal_translate)
     - Tippecanoe (for vector tiles)
+    - mb-util (for converting XYZ to MBTiles)
     - pmtiles CLI (for PMTiles conversion)
 
 Usage:
@@ -135,13 +136,23 @@ def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, 
             str(xyz_dir)
         ], check=True, capture_output=True)
 
-        # Step 3: Convert to PMTiles (requires pmtiles CLI)
+        # Step 3: Convert XYZ to MBTiles (requires mb-util)
+        click.echo(f"  Converting to MBTiles...")
+        temp_mbtiles = temp_dir / f"{input_file.stem}.mbtiles"
+
+        subprocess.run([
+            'mb-util',
+            str(xyz_dir),
+            str(temp_mbtiles)
+        ], check=True, capture_output=True)
+
+        # Step 4: Convert MBTiles to PMTiles (requires pmtiles CLI)
         click.echo(f"  Converting to PMTiles...")
 
         subprocess.run([
             'pmtiles',
-            'create',
-            str(xyz_dir),
+            'convert',
+            str(temp_mbtiles),
             str(output_file)
         ], check=True, capture_output=True)
 
@@ -151,14 +162,17 @@ def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, 
         import shutil
         if temp_tif.exists():
             temp_tif.unlink()
+        if temp_mbtiles.exists():
+            temp_mbtiles.unlink()
         if xyz_dir.exists():
             shutil.rmtree(xyz_dir)
 
     except subprocess.CalledProcessError as e:
         click.echo(f"  Error: {e}")
     except FileNotFoundError:
-        click.echo(f"  Error: Required tool not found (gdal_translate, gdal2tiles.py, or pmtiles)")
+        click.echo(f"  Error: Required tool not found (gdal_translate, gdal2tiles.py, mb-util, or pmtiles)")
         click.echo(f"  Install GDAL: https://gdal.org/")
+        click.echo(f"  Install mb-util: https://github.com/mapbox/mbutil")
         click.echo(f"  Install pmtiles: https://github.com/protomaps/go-pmtiles")
 
 
