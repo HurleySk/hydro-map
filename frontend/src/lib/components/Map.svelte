@@ -163,10 +163,10 @@ let unsubscribeBasemap: () => void = () => {};
 					type: 'vector',
 					url: 'pmtiles:///tiles/streams.pmtiles'
 				},
-				geology: {
-					type: 'vector',
-					url: 'pmtiles:///tiles/geology.pmtiles'
-				},
+				// geology: {  // No geology data available
+				// 	type: 'vector',
+				// 	url: 'pmtiles:///tiles/geology.pmtiles'
+				// },
 				watersheds: {
 					type: 'geojson',
 					data: {
@@ -227,28 +227,28 @@ let unsubscribeBasemap: () => void = () => {};
 					layout: { visibility: 'none' },
 					paint: { 'raster-opacity': 0.7 }
 				},
-				{
-					id: 'geology',
-					type: 'fill',
-					source: 'geology',
-					'source-layer': 'geology',
-					layout: { visibility: 'none' },
-					paint: {
-						'fill-color': ['get', 'color'],
-						'fill-opacity': 0.6
-					}
-				},
-				{
-					id: 'geology-outline',
-					type: 'line',
-					source: 'geology',
-					'source-layer': 'geology',
-					layout: { visibility: 'none' },
-					paint: {
-						'line-color': '#333',
-						'line-width': 1
-					}
-				},
+// 				{ No geology data available
+					// id: 'geology',
+					// type: 'fill',
+					// source: 'geology',
+					// 'source-layer': 'geology',
+					// layout: { visibility: 'none' },
+					// paint: {
+						// 'fill-color': ['get', 'color'],
+						// 'fill-opacity': 0.6
+					// }
+				// },
+				// {
+					// id: 'geology-outline',
+					// type: 'line',
+					// source: 'geology',
+					// 'source-layer': 'geology',
+					// layout: { visibility: 'none' },
+					// paint: {
+						// 'line-color': '#333',
+						// 'line-width': 1
+					// }
+				// },
 				{
 					id: 'streams',
 					type: 'line',

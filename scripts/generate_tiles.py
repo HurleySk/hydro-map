@@ -146,6 +146,16 @@ def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, 
             str(temp_mbtiles)
         ], check=True, capture_output=True)
 
+        # Step 3.5: Fix MBTiles metadata (mb-util doesn't set format/tile_type)
+        click.echo(f"  Fixing MBTiles metadata...")
+        import sqlite3
+        conn = sqlite3.connect(str(temp_mbtiles))
+        cursor = conn.cursor()
+        cursor.execute("INSERT OR REPLACE INTO metadata (name, value) VALUES ('format', 'png')")
+        cursor.execute("INSERT OR REPLACE INTO metadata (name, value) VALUES ('type', 'overlay')")
+        conn.commit()
+        conn.close()
+
         # Step 4: Convert MBTiles to PMTiles (requires pmtiles CLI)
         click.echo(f"  Converting to PMTiles...")
 
