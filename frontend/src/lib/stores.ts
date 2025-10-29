@@ -68,6 +68,27 @@ export const crossSection = writable<any>(null);
 // Cross-section line points being digitized
 export const crossSectionLine = writable<[number, number][]>([]);
 
+// Latest delineation response (metadata + pour point)
+export const latestDelineation = writable<any>(null);
+
+// Watershed outlet features (snapped pour points)
+export const watershedOutlets = writable<any[]>([]);
+
+// Delineation settings persisted in UI
+export interface DelineationSettings {
+	snapToStream: boolean;
+	snapRadius: number;
+}
+
+export const delineationSettings = writable<DelineationSettings>({
+	snapToStream: true,
+	snapRadius: 100
+});
+
+// Basemap style selection
+export type BasemapStyle = 'osm' | 'light';
+export const basemapStyle = writable<BasemapStyle>('osm');
+
 // Map view state with localStorage persistence
 export const mapView = createPersistedStore<MapViewState>('view', DEFAULT_MAP_VIEW);
 

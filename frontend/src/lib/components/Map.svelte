@@ -5,7 +5,18 @@
 	import type { StyleSpecification } from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { Protocol } from 'pmtiles';
-	import { layers, watersheds, mapView, activeTool, crossSectionLine, crossSection } from '$lib/stores';
+import {
+	layers,
+	watersheds,
+	mapView,
+	activeTool,
+	crossSectionLine,
+	crossSection,
+	watershedOutlets,
+	latestDelineation,
+	delineationSettings,
+	basemapStyle
+} from '$lib/stores';
 
 	const dispatch = createEventDispatcher();
 
@@ -13,10 +24,11 @@
 	let map: maplibregl.Map;
 	let saveTimeout: number;
 	let searchMarker: maplibregl.Marker | null = null;
-	let unsubscribeLayers: () => void = () => {};
-	let unsubscribeWatersheds: () => void = () => {};
-	let unsubscribeCrossSection: () => void = () => {};
-	let clearWatershedsListener: () => void = () => {};
+let unsubscribeLayers: () => void = () => {};
+let unsubscribeWatersheds: () => void = () => {};
+let unsubscribeCrossSection: () => void = () => {};
+let unsubscribeOutlets: () => void = () => {};
+let unsubscribeBasemap: () => void = () => {};
 
 	// Default center (adjust to your area of interest)
 	const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749]; // San Francisco
@@ -75,21 +87,27 @@
 		// Update cross-section layer when store changes
 		unsubscribeCrossSection = crossSectionLine.subscribe(updateCrossSectionLayer);
 
+		// Update outlets layer when store changes
+		unsubscribeOutlets = watershedOutlets.subscribe(updateOutletLayer);
+
+		// Update basemap selection
+		unsubscribeBasemap = basemapStyle.subscribe(updateBasemap);
+
 		// Refresh rendered data once style is loaded
 		map.on('load', () => {
 			updateLayers(get(layers));
 			updateWatershedsLayer(get(watersheds));
 			updateCrossSectionLayer(get(crossSectionLine));
+			updateOutletLayer(get(watershedOutlets));
+			updateBasemap(get(basemapStyle));
 		});
 
-		clearWatershedsListener = () => clearWatersheds();
-		window.addEventListener('clear-watersheds', clearWatershedsListener);
-
 		return () => {
-			window.removeEventListener('clear-watersheds', clearWatershedsListener);
 			unsubscribeLayers();
 			unsubscribeWatersheds();
 			unsubscribeCrossSection();
+			unsubscribeOutlets();
+			unsubscribeBasemap();
 			map.remove();
 			maplibregl.removeProtocol('pmtiles');
 		};
@@ -113,13 +131,21 @@
 		return {
 			version: 8 as 8,
 			sources: {
-				'base-map': {
+				'base-map-osm': {
 					type: 'raster',
 					tiles: [
 						'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
 					],
 					tileSize: 256,
 					attribution: '© OpenStreetMap contributors'
+				},
+				'base-map-light': {
+					type: 'raster',
+					tiles: [
+						'https://tile.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
+					],
+					tileSize: 256,
+					attribution: '© OpenStreetMap contributors, © CARTO'
 				},
 				hillshade: {
 					type: 'raster',
@@ -154,14 +180,31 @@
 						type: 'FeatureCollection',
 						features: []
 					}
+				},
+				'watershed-outlets': {
+					type: 'geojson',
+					data: {
+						type: 'FeatureCollection',
+						features: []
+					}
+				},
+				contours: {
+					type: 'vector',
+					url: 'pmtiles:///tiles/contours.pmtiles'
 				}
 			},
 			layers: [
 				{
-					id: 'base',
+					id: 'base-osm',
 					type: 'raster',
-					source: 'base-map',
+					source: 'base-map-osm',
 					layout: { visibility: 'visible' }
+				},
+				{
+					id: 'base-light',
+					type: 'raster',
+					source: 'base-map-light',
+					layout: { visibility: 'none' }
 				},
 				{
 					id: 'hillshade',
@@ -242,6 +285,29 @@
 					}
 				},
 				{
+					id: 'watershed-outlets',
+					type: 'circle',
+					source: 'watershed-outlets',
+					paint: {
+						'circle-color': '#22c55e',
+						'circle-radius': 6,
+						'circle-stroke-width': 2,
+						'circle-stroke-color': '#ffffff'
+					}
+				},
+				{
+					id: 'contours',
+					type: 'line',
+					source: 'contours',
+					'source-layer': 'contours',
+					layout: { visibility: 'none' },
+					paint: {
+						'line-color': '#1f2937',
+						'line-width': 1,
+						'line-opacity': 0.6
+					}
+				},
+				{
 					id: 'cross-section-line',
 					type: 'line',
 					source: 'cross-section-line',
@@ -285,20 +351,43 @@
 		});
 	}
 
-	function updateWatershedsLayer(watershedsData: any[]) {
-		if (!map || !map.isStyleLoaded()) return;
+function updateWatershedsLayer(watershedsData: any[]) {
+	if (!map || !map.isStyleLoaded()) return;
 
-		const source = map.getSource('watersheds') as maplibregl.GeoJSONSource;
-		if (!source) return;
+	const source = map.getSource('watersheds') as maplibregl.GeoJSONSource;
+	if (!source) return;
 
 		source.setData({
 			type: 'FeatureCollection',
 			features: watershedsData
 		});
-	}
+}
 
-	function updateCrossSectionLayer(points: [number, number][]) {
-		if (!map || !map.isStyleLoaded()) return;
+function updateOutletLayer(outlets: any[]) {
+	if (!map || !map.isStyleLoaded()) return;
+
+	const source = map.getSource('watershed-outlets') as maplibregl.GeoJSONSource;
+	if (!source) return;
+
+	source.setData({
+		type: 'FeatureCollection',
+		features: outlets
+	});
+}
+
+function updateBasemap(style: 'osm' | 'light') {
+	if (!map || !map.isStyleLoaded()) return;
+
+	if (map.getLayer('base-osm')) {
+		map.setLayoutProperty('base-osm', 'visibility', style === 'osm' ? 'visible' : 'none');
+	}
+	if (map.getLayer('base-light')) {
+		map.setLayoutProperty('base-light', 'visibility', style === 'light' ? 'visible' : 'none');
+	}
+}
+
+function updateCrossSectionLayer(points: [number, number][]) {
+	if (!map || !map.isStyleLoaded()) return;
 
 		const source = map.getSource('cross-section-line') as maplibregl.GeoJSONSource;
 		if (!source) return;
@@ -374,31 +463,37 @@
 		}
 	}
 
-	export async function delineateWatershed(lngLat: { lng: number; lat: number }) {
-		try {
-			const response = await fetch('/api/delineate', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					lat: lngLat.lat,
-					lon: lngLat.lng,
-					snap_to_stream: true
-				})
-			});
+export async function delineateWatershed(lngLat: { lng: number; lat: number }) {
+	try {
+		const settings = get(delineationSettings);
+		const response = await fetch('/api/delineate', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				lat: lngLat.lat,
+				lon: lngLat.lng,
+				snap_to_stream: settings.snapToStream,
+				snap_radius: settings.snapRadius
+			})
+		});
 
 			if (!response.ok) {
 				throw new Error('Delineation failed');
 			}
 
-			const result = await response.json();
+		const result = await response.json();
 
-			// Add watershed to map
-			const nextWatersheds = [...get(watersheds), result.watershed];
-			watersheds.set(nextWatersheds);
+		// Add watershed to map
+		const nextWatersheds = [...get(watersheds), result.watershed];
+		watersheds.set(nextWatersheds);
+		latestDelineation.set(result);
 
-			// Fit map to watershed bounds
-			const bounds = new maplibregl.LngLatBounds();
-			const geom = result.watershed.geometry;
+		const nextOutlets = [...get(watershedOutlets), result.pour_point];
+		watershedOutlets.set(nextOutlets);
+
+		// Fit map to watershed bounds
+		const bounds = new maplibregl.LngLatBounds();
+		const geom = result.watershed.geometry;
 
 			// Handle both Polygon and MultiPolygon
 			if (geom.type === 'Polygon') {
@@ -426,9 +521,11 @@
 		}
 	}
 
-	export function clearWatersheds() {
-		watersheds.set([]);
-	}
+export function clearWatersheds() {
+	watersheds.set([]);
+	watershedOutlets.set([]);
+	latestDelineation.set(null);
+}
 </script>
 
 <div bind:this={mapContainer} class="map"></div>

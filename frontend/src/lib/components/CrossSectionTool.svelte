@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { activeTool, crossSection, crossSectionLine } from '$lib/stores';
 	import { get } from 'svelte/store';
+	import CrossSectionChart from './CrossSectionChart.svelte';
 
 	let isActive = false;
 	let linePoints: [number, number][] = [];
@@ -89,6 +90,7 @@
 				Samples: {$crossSection.metadata.num_samples}<br/>
 				Geology contacts: {$crossSection.metadata.num_geology_contacts}
 			</p>
+			<CrossSectionChart profile={$crossSection.profile} />
 		</div>
 	{/if}
 </div>
@@ -210,5 +212,9 @@
 		font-size: 0.813rem;
 		color: #166534;
 		line-height: 1.5;
+	}
+
+	.profile-preview :global(svg) {
+		margin-top: 0.75rem;
 	}
 </style>

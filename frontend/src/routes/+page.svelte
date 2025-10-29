@@ -6,6 +6,8 @@
 	import WatershedTool from '$lib/components/WatershedTool.svelte';
 	import CrossSectionTool from '$lib/components/CrossSectionTool.svelte';
 	import FeatureInfo from '$lib/components/FeatureInfo.svelte';
+	import FeatureInfoTool from '$lib/components/FeatureInfoTool.svelte';
+	import BaseMapToggle from '$lib/components/BaseMapToggle.svelte';
 	import { layers, activeTool } from '$lib/stores';
 
 	let mapComponent: any;
@@ -58,7 +60,9 @@
 
 		<aside class="controls">
 			<LocationSearch on:select={handleLocationSelect} />
+			<BaseMapToggle />
 			<LayerPanel />
+			<FeatureInfoTool />
 			<WatershedTool />
 			<CrossSectionTool />
 		</aside>
@@ -66,7 +70,10 @@
 		{#if selectedFeature}
 			<FeatureInfo
 				location={selectedFeature.lngLat}
-				on:close={() => selectedFeature = null}
+				on:close={() => {
+					selectedFeature = null;
+					activeTool.set('none');
+				}}
 			/>
 		{/if}
 	</main>

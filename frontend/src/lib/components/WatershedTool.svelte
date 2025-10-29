@@ -1,21 +1,47 @@
 <script lang="ts">
-	import { activeTool, watersheds } from '$lib/stores';
+	import {
+		activeTool,
+		watersheds,
+		delineationSettings,
+		watershedOutlets,
+		latestDelineation
+	} from '$lib/stores';
 
-	let isActive = false;
-	let snapToStream = true;
+	$: numWatersheds = $watersheds.length;
+	$: settings = $delineationSettings;
+	$: latest = $latestDelineation;
+	$: isActive = $activeTool === 'delineate';
+	$: snapToStream = settings.snapToStream;
+	$: latestSnapRadius = latest?.metadata?.snap_radius ?? 'n/a';
+	$: latestFlowAccum = latest?.pour_point?.properties?.flow_accumulation ?? 'n/a';
+	$: latestProcessingTime = latest?.metadata?.processing_time ?? null;
+	$: latestSnapLabel = typeof latestSnapRadius === 'number' ? `${latestSnapRadius} m` : latestSnapRadius;
+	$: latestFlowLabel = typeof latestFlowAccum === 'number' ? `${latestFlowAccum} cells` : latestFlowAccum;
+	$: latestProcessingLabel = latestProcessingTime !== null ? `${latestProcessingTime.toFixed(2)} s` : 'n/a';
 
 	function toggleTool() {
-		isActive = !isActive;
-		activeTool.set(isActive ? 'delineate' : 'none');
+		activeTool.set(isActive ? 'none' : 'delineate');
 	}
 
 	function clearWatersheds() {
 		watersheds.set([]);
-		// This will be handled by the Map component
-		window.dispatchEvent(new CustomEvent('clear-watersheds'));
+		watershedOutlets.set([]);
+		latestDelineation.set(null);
 	}
 
-	$: numWatersheds = $watersheds.length;
+	function toggleSnap() {
+		delineationSettings.update((current) => ({
+			...current,
+			snapToStream: !current.snapToStream
+		}));
+	}
+
+	function updateSnapRadius(radius: number) {
+		delineationSettings.update((current) => ({
+			...current,
+			snapRadius: radius
+		}));
+	}
 </script>
 
 <div class="panel">
@@ -35,9 +61,25 @@
 		</p>
 
 		<label class="checkbox-label">
-			<input type="checkbox" bind:checked={snapToStream} />
+			<input type="checkbox" checked={snapToStream} on:change={toggleSnap} />
 			<span>Snap to nearest stream</span>
 		</label>
+
+		{#if snapToStream}
+			<div class="snap-control">
+				<label>
+					Snap radius: <span>{settings.snapRadius} m</span>
+					<input
+						type="range"
+						min="10"
+						max="500"
+						step="10"
+						value={settings.snapRadius}
+						on:input={(event) => updateSnapRadius(parseInt(event.currentTarget.value, 10))}
+					/>
+				</label>
+			</div>
+		{/if}
 	{/if}
 
 	{#if numWatersheds > 0}
@@ -45,6 +87,16 @@
 			<p class="result-count">
 				{numWatersheds} watershed{numWatersheds > 1 ? 's' : ''} delineated
 			</p>
+
+		{#if latest}
+			<div class="latest">
+				<p>
+					Snap radius used: {latestSnapLabel}<br/>
+					Flow accumulation: {latestFlowLabel}<br/>
+					Last runtime: {latestProcessingLabel}
+				</p>
+			</div>
+		{/if}
 
 			<button class="clear-button" on:click={clearWatersheds}>
 				Clear All
@@ -121,6 +173,26 @@
 		cursor: pointer;
 	}
 
+	.snap-control {
+		margin-top: 1rem;
+	}
+
+	.snap-control label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		font-size: 0.813rem;
+		color: #475569;
+	}
+
+	.snap-control span {
+		font-weight: 600;
+	}
+
+	.snap-control input[type="range"] {
+		width: 100%;
+	}
+
 	.results {
 		margin-top: 1rem;
 		padding-top: 1rem;
@@ -131,6 +203,16 @@
 		margin: 0 0 0.75rem 0;
 		font-size: 0.875rem;
 		color: #64748b;
+	}
+
+	.latest {
+		background: #f8fafc;
+		border: 1px solid #e2e8f0;
+		border-radius: 6px;
+		padding: 0.75rem;
+		margin-bottom: 0.75rem;
+		font-size: 0.813rem;
+		color: #475569;
 	}
 
 	.clear-button {

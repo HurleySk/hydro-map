@@ -75,7 +75,13 @@ async def delineate(request: DelineationRequest):
             }
 
         # Step 2: Check cache
-        cache_key = f"{snapped_point['geometry']['coordinates'][1]:.6f},{snapped_point['geometry']['coordinates'][0]:.6f}"
+        snapped_lat = snapped_point['geometry']['coordinates'][1]
+        snapped_lon = snapped_point['geometry']['coordinates'][0]
+        cache_key = (
+            f"{snapped_lat:.6f},{snapped_lon:.6f}"
+            f"|snap:{int(snap_to_stream)}"
+            f"|radius:{snap_radius if snap_to_stream else 'none'}"
+        )
 
         if settings.CACHE_ENABLED:
             cached_result = await get_cached_watershed(cache_key)
@@ -87,8 +93,8 @@ async def delineate(request: DelineationRequest):
 
         # Step 3: Delineate watershed
         watershed_result = await delineate_watershed(
-            lat=snapped_point["geometry"]["coordinates"][1],
-            lon=snapped_point["geometry"]["coordinates"][0]
+            lat=snapped_lat,
+            lon=snapped_lon
         )
 
         # Step 4: Build response

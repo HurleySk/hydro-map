@@ -76,7 +76,7 @@ async def query_streams(point: Point, buffer_m: float) -> Optional[List[Dict]]:
 
     try:
         # Read streams
-        streams_gdf = gpd.read_file(streams_path)
+        streams_gdf = gpd.read_file(streams_path, layer='streams')
 
         # Create buffer around point
         point_gdf = gpd.GeoDataFrame([1], geometry=[point], crs="EPSG:4326")
@@ -96,11 +96,12 @@ async def query_streams(point: Point, buffer_m: float) -> Optional[List[Dict]]:
         # Extract attributes
         features = []
         for idx, row in intersecting.iterrows():
+            length_km = float(row.get('length_km', row.get('LengthKM', 0)))
             feature = {
                 "type": "stream",
                 "name": row.get('GNIS_NAME', row.get('name', 'Unnamed')),
                 "order": int(row.get('StreamOrde', row.get('order', 0))),
-                "length_km": float(row.get('LengthKM', 0)),
+                "length_km": length_km,
             }
             features.append(feature)
 

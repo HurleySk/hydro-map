@@ -140,7 +140,7 @@ def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, 
 
         subprocess.run([
             'pmtiles',
-            'convert',
+            'create',
             str(xyz_dir),
             str(output_file)
         ], check=True, capture_output=True)

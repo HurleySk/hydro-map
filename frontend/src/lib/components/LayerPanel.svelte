@@ -161,6 +161,7 @@
 		border-radius: 2px;
 		background: #e2e8f0;
 		outline: none;
+		appearance: none;
 		-webkit-appearance: none;
 	}
 
