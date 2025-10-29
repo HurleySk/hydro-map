@@ -3,28 +3,37 @@
 	import maplibregl from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { Protocol } from 'pmtiles';
-	import { layers, watersheds } from '$lib/stores';
+	import { layers, watersheds, mapView } from '$lib/stores';
 
 	const dispatch = createEventDispatcher();
 
 	let mapContainer: HTMLDivElement;
 	let map: maplibregl.Map;
+	let saveTimeout: number;
+	let searchMarker: maplibregl.Marker | null = null;
 
 	// Default center (adjust to your area of interest)
-	const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749]; // San Francisco
-	const DEFAULT_ZOOM = 11;
+	const DEFAULT_CENTER: [number, number] = [-77.1986, 38.8296]; // Mason District Park, Annandale, VA
+	const DEFAULT_ZOOM = 14;
 
 	onMount(() => {
 		// Register PMTiles protocol
 		const protocol = new Protocol();
 		maplibregl.addProtocol('pmtiles', protocol.tile);
 
+		// Get saved view or use defaults
+		const savedView = $mapView;
+		const initialCenter = savedView?.center || DEFAULT_CENTER;
+		const initialZoom = savedView?.zoom || DEFAULT_ZOOM;
+
 		// Initialize map
 		map = new maplibregl.Map({
 			container: mapContainer,
 			style: createMapStyle(),
-			center: DEFAULT_CENTER,
-			zoom: DEFAULT_ZOOM,
+			center: initialCenter,
+			zoom: initialZoom,
+			bearing: savedView?.bearing || 0,
+			pitch: savedView?.pitch || 0,
 			maxZoom: 16,
 			minZoom: 8
 		});
@@ -41,14 +50,35 @@
 			});
 		});
 
+		// Save map view on movement (debounced)
+		map.on('moveend', saveMapView);
+		map.on('zoomend', saveMapView);
+
 		// Update layers when store changes
 		layers.subscribe(updateLayers);
+
+		// Update watersheds layer when store changes
+		watersheds.subscribe(updateWatershedsLayer);
 
 		return () => {
 			map.remove();
 			maplibregl.removeProtocol('pmtiles');
 		};
 	});
+
+	// Save current map view to store (debounced)
+	function saveMapView() {
+		clearTimeout(saveTimeout);
+		saveTimeout = window.setTimeout(() => {
+			const center = map.getCenter();
+			mapView.set({
+				center: [center.lng, center.lat],
+				zoom: map.getZoom(),
+				bearing: map.getBearing(),
+				pitch: map.getPitch()
+			});
+		}, 500);
+	}
 
 	function createMapStyle() {
 		return {
@@ -198,6 +228,51 @@
 		});
 	}
 
+	function updateWatershedsLayer(watershedsData: any[]) {
+		if (!map || !map.isStyleLoaded()) return;
+
+		const source = map.getSource('watersheds') as maplibregl.GeoJSONSource;
+		if (source) {
+			source.setData({
+				type: 'FeatureCollection',
+				features: watershedsData
+			});
+		}
+	}
+
+	// Fly to a location with smooth animation
+	export function flyToLocation(center: [number, number], zoom?: number, name?: string) {
+		if (!map) return;
+
+		map.flyTo({
+			center,
+			zoom: zoom || 13,
+			speed: 1.2,
+			curve: 1.4,
+			essential: true
+		});
+
+		// Remove existing marker
+		if (searchMarker) {
+			searchMarker.remove();
+		}
+
+		// Add marker at searched location
+		if (name) {
+			const el = document.createElement('div');
+			el.className = 'search-marker';
+			el.style.backgroundImage = 'url(data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0iI2VmNDQ0NCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cGF0aCBkPSJNMTIgMkM4LjEzIDIgNSA1LjEzIDUgOWMwIDUuMjUgNyAxMyA3IDEzczctNy43NSA3LTEzYzAtMy44Ny0zLjEzLTctNy03em0wIDkuNWMtMS4zOCAwLTIuNS0xLjEyLTIuNS0yLjVzMS4xMi0yLjUgMi41LTIuNSAyLjUgMS4xMiAyLjUgMi41LTEuMTIgMi41LTIuNSAyLjV6Ii8+PC9zdmc+)';
+			el.style.width = '32px';
+			el.style.height = '32px';
+			el.style.backgroundSize = 'contain';
+			el.style.cursor = 'pointer';
+
+			searchMarker = new maplibregl.Marker({ element: el })
+				.setLngLat(center)
+				.addTo(map);
+		}
+	}
+
 	export async function delineateWatershed(lngLat: { lng: number; lat: number }) {
 		try {
 			const response = await fetch('/api/delineate', {
@@ -228,9 +303,27 @@
 
 				// Fit map to watershed bounds
 				const bounds = new maplibregl.LngLatBounds();
-				result.watershed.geometry.coordinates[0].forEach((coord: [number, number]) => {
-					bounds.extend(coord);
-				});
+				const geom = result.watershed.geometry;
+
+				// Handle both Polygon and MultiPolygon
+				if (geom.type === 'Polygon') {
+					// For Polygon, iterate all rings (outer + holes)
+					geom.coordinates.forEach((ring: [number, number][]) => {
+						ring.forEach((coord: [number, number]) => {
+							bounds.extend(coord);
+						});
+					});
+				} else if (geom.type === 'MultiPolygon') {
+					// For MultiPolygon, iterate all polygons and their rings
+					geom.coordinates.forEach((polygon: [number, number][][]) => {
+						polygon.forEach((ring: [number, number][]) => {
+							ring.forEach((coord: [number, number]) => {
+								bounds.extend(coord);
+							});
+						});
+					});
+				}
+
 				map.fitBounds(bounds, { padding: 50 });
 			}
 

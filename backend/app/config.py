@@ -12,12 +12,12 @@ class Settings(BaseSettings):
     BACKEND_PORT: int = 8000
     BACKEND_RELOAD: bool = True
 
-    # Data paths
-    DEM_PATH: str = "./data/processed/dem/filled_dem.tif"
-    FLOW_DIR_PATH: str = "./data/processed/dem/flow_direction.tif"
-    FLOW_ACC_PATH: str = "./data/processed/dem/flow_accumulation.tif"
-    STREAMS_PATH: str = "./data/processed/streams.gpkg"
-    GEOLOGY_PATH: str = "./data/processed/geology.gpkg"
+    # Data paths (relative to project root, one level up from backend/)
+    DEM_PATH: str = "../data/processed/dem/filled_dem.tif"
+    FLOW_DIR_PATH: str = "../data/processed/dem/flow_direction.tif"
+    FLOW_ACC_PATH: str = "../data/processed/dem/flow_accumulation.tif"
+    STREAMS_PATH: str = "../data/processed/streams.gpkg"
+    GEOLOGY_PATH: str = "../data/processed/geology.gpkg"
 
     # Watershed delineation settings
     SNAP_TO_STREAM: bool = True

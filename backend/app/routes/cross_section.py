@@ -9,6 +9,7 @@ import numpy as np
 from pathlib import Path
 
 from app.config import settings
+from app.services.watershed import transform_coordinates_to_raster_crs
 
 
 router = APIRouter()
@@ -126,8 +127,11 @@ async def sample_elevation_profile(
         for i, point in enumerate(gdf_samples_wgs84.geometry):
             lon, lat = point.x, point.y
 
+            # Transform coordinates to DEM CRS
+            x, y = transform_coordinates_to_raster_crs(lon, lat, dem_src.crs)
+
             # Get elevation value
-            row, col = rowcol(dem_src.transform, lon, lat)
+            row, col = rowcol(dem_src.transform, x, y)
 
             if 0 <= row < dem_src.height and 0 <= col < dem_src.width:
                 elevation = float(dem_src.read(1, window=((row, row+1), (col, col+1)))[0, 0])

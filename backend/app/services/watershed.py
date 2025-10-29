@@ -13,6 +13,7 @@ import numpy as np
 import rasterio
 from rasterio.transform import rowcol
 from rasterio.features import shapes
+from rasterio.crs import CRS
 from shapely.geometry import shape, Point, mapping
 from shapely.ops import unary_union
 import geopandas as gpd
@@ -20,6 +21,84 @@ from pyproj import Transformer
 import json
 
 from app.config import settings
+
+
+def transform_coordinates_to_raster_crs(
+    lon: float, lat: float, raster_crs: CRS
+) -> Tuple[float, float]:
+    """
+    Transform WGS84 lon/lat coordinates to raster CRS.
+
+    Args:
+        lon: Longitude in WGS84
+        lat: Latitude in WGS84
+        raster_crs: Target CRS from rasterio
+
+    Returns:
+        Tuple of (x, y) in raster CRS
+    """
+    # If already in WGS84, return as-is
+    if raster_crs == CRS.from_epsg(4326):
+        return lon, lat
+
+    # Create transformer from WGS84 to raster CRS
+    transformer = Transformer.from_crs("EPSG:4326", raster_crs, always_xy=True)
+    x, y = transformer.transform(lon, lat)
+    return x, y
+
+
+def calculate_snap_radius_pixels(
+    radius_meters: int, raster_crs: CRS, center_lon: float, center_lat: float, pixel_size: Tuple[float, float]
+) -> int:
+    """
+    Calculate snap radius in pixels, accounting for CRS.
+
+    Args:
+        radius_meters: Desired radius in meters
+        raster_crs: CRS of the raster
+        center_lon: Center longitude in WGS84
+        center_lat: Center latitude in WGS84
+        pixel_size: (x_size, y_size) from raster.res
+
+    Returns:
+        Radius in pixels
+    """
+    # For WGS84, use approximate conversion (meters per degree at latitude)
+    if raster_crs == CRS.from_epsg(4326):
+        meters_per_degree = 111320 * np.cos(np.radians(center_lat))
+        radius_degrees = radius_meters / meters_per_degree
+        pixel_radius = int(radius_degrees / min(pixel_size[0], abs(pixel_size[1])))
+    else:
+        # For projected CRS, pixel size is already in meters (or similar units)
+        pixel_radius = int(radius_meters / min(abs(pixel_size[0]), abs(pixel_size[1])))
+
+    return max(1, pixel_radius)
+
+
+def calculate_distance_meters(
+    lon1: float, lat1: float, lon2: float, lat2: float
+) -> float:
+    """
+    Calculate distance between two WGS84 points using Haversine formula.
+
+    Args:
+        lon1, lat1: First point
+        lon2, lat2: Second point
+
+    Returns:
+        Distance in meters
+    """
+    # Use GeoDataFrame for accurate distance calculation
+    p1 = Point(lon1, lat1)
+    p2 = Point(lon2, lat2)
+    gdf1 = gpd.GeoDataFrame([1], geometry=[p1], crs="EPSG:4326")
+    gdf2 = gpd.GeoDataFrame([1], geometry=[p2], crs="EPSG:4326")
+
+    # Project to equal-area CRS
+    gdf1_proj = gdf1.to_crs("EPSG:6933")
+    gdf2_proj = gdf2.to_crs("EPSG:6933")
+
+    return gdf1_proj.geometry.distance(gdf2_proj.geometry).values[0]
 
 
 async def snap_pour_point(lat: float, lon: float, radius: int = 100) -> Dict:
@@ -53,12 +132,16 @@ async def snap_pour_point(lat: float, lon: float, radius: int = 100) -> Dict:
         }
 
     with rasterio.open(flow_acc_path) as src:
-        # Convert lat/lon to raster coordinates
-        row, col = rowcol(src.transform, lon, lat)
+        # Transform coordinates from WGS84 to raster CRS
+        x, y = transform_coordinates_to_raster_crs(lon, lat, src.crs)
 
-        # Calculate pixel radius based on raster resolution
-        pixel_size_x, pixel_size_y = src.res
-        pixel_radius = int(radius / min(pixel_size_x, abs(pixel_size_y)))
+        # Convert to raster row/col
+        row, col = rowcol(src.transform, x, y)
+
+        # Calculate pixel radius based on raster resolution and CRS
+        pixel_radius = calculate_snap_radius_pixels(
+            radius, src.crs, lon, lat, src.res
+        )
 
         # Define search window
         row_min = max(0, row - pixel_radius)
@@ -99,9 +182,19 @@ async def snap_pour_point(lat: float, lon: float, radius: int = 100) -> Dict:
         snapped_row = row_min + max_idx[0]
         snapped_col = col_min + max_idx[1]
 
-        # Convert back to geographic coordinates
-        snapped_lon, snapped_lat = src.xy(snapped_row, snapped_col)
+        # Convert back to raster CRS coordinates
+        snapped_x, snapped_y = src.xy(snapped_row, snapped_col)
         max_accumulation = float(flow_acc[max_idx])
+
+        # Transform snapped coordinates back to WGS84
+        if src.crs == CRS.from_epsg(4326):
+            snapped_lon, snapped_lat = snapped_x, snapped_y
+        else:
+            transformer = Transformer.from_crs(src.crs, "EPSG:4326", always_xy=True)
+            snapped_lon, snapped_lat = transformer.transform(snapped_x, snapped_y)
+
+    # Calculate accurate distance in meters
+    snap_distance = calculate_distance_meters(lon, lat, snapped_lon, snapped_lat)
 
     return {
         "type": "Feature",
@@ -113,7 +206,7 @@ async def snap_pour_point(lat: float, lon: float, radius: int = 100) -> Dict:
             "snapped": True,
             "original_lat": lat,
             "original_lon": lon,
-            "snap_distance_m": float(((snapped_lat - lat) ** 2 + (snapped_lon - lon) ** 2) ** 0.5 * 111320),
+            "snap_distance_m": float(snap_distance),
             "flow_accumulation": max_accumulation
         }
     }
@@ -135,8 +228,11 @@ async def delineate_watershed(lat: float, lon: float) -> Dict:
         raise FileNotFoundError(f"Flow direction file not found: {flow_dir_path}")
 
     with rasterio.open(flow_dir_path) as flow_dir_src:
-        # Convert pour point to raster coordinates
-        row, col = rowcol(flow_dir_src.transform, lon, lat)
+        # Transform pour point from WGS84 to raster CRS
+        x, y = transform_coordinates_to_raster_crs(lon, lat, flow_dir_src.crs)
+
+        # Convert to raster row/col
+        row, col = rowcol(flow_dir_src.transform, x, y)
 
         if row < 0 or row >= flow_dir_src.height or col < 0 or col >= flow_dir_src.width:
             raise ValueError("Pour point is outside the DEM extent")

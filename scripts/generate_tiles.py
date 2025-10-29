@@ -138,20 +138,28 @@ def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, 
         # Step 3: Convert to PMTiles (requires pmtiles CLI)
         click.echo(f"  Converting to PMTiles...")
 
-        # Note: This requires the pmtiles CLI tool
-        # For now, we'll create a note file with instructions
-        note_file = output_file.with_suffix('.txt')
-        with open(note_file, 'w') as f:
-            f.write(f"To convert {xyz_dir} to PMTiles, run:\n")
-            f.write(f"pmtiles convert {xyz_dir} {output_file}\n")
+        subprocess.run([
+            'pmtiles',
+            'convert',
+            str(xyz_dir),
+            str(output_file)
+        ], check=True, capture_output=True)
 
-        click.echo(f"  Note: Manual conversion needed - see {note_file}")
+        click.echo(f"  Created {output_file}")
+
+        # Clean up temporary files
+        import shutil
+        if temp_tif.exists():
+            temp_tif.unlink()
+        if xyz_dir.exists():
+            shutil.rmtree(xyz_dir)
 
     except subprocess.CalledProcessError as e:
         click.echo(f"  Error: {e}")
     except FileNotFoundError:
-        click.echo(f"  Error: Required tool not found (gdal_translate or gdal2tiles.py)")
-        click.echo(f"  Please install GDAL: https://gdal.org/")
+        click.echo(f"  Error: Required tool not found (gdal_translate, gdal2tiles.py, or pmtiles)")
+        click.echo(f"  Install GDAL: https://gdal.org/")
+        click.echo(f"  Install pmtiles: https://github.com/protomaps/go-pmtiles")
 
 
 def generate_vector_pmtiles(

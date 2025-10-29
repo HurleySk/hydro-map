@@ -30,6 +30,9 @@ data/processed/*.tiff
 data/tiles/*.pmtiles
 data/tiles/*.mbtiles
 
+# Local review docs (ignore assessment drafts)
+docs/review/
+
 # Cache
 .cache/
 *.cache

@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import Map from '$lib/components/Map.svelte';
 	import LayerPanel from '$lib/components/LayerPanel.svelte';
+	import LocationSearch from '$lib/components/LocationSearch.svelte';
 	import WatershedTool from '$lib/components/WatershedTool.svelte';
 	import CrossSectionTool from '$lib/components/CrossSectionTool.svelte';
 	import FeatureInfo from '$lib/components/FeatureInfo.svelte';
@@ -30,6 +31,13 @@
 			selectedFeature = { lngLat };
 		}
 	}
+
+	function handleLocationSelect(event: CustomEvent) {
+		const { center, zoom, name } = event.detail;
+		if (mapComponent) {
+			mapComponent.flyToLocation(center, zoom, name);
+		}
+	}
 </script>
 
 <svelte:head>
@@ -49,6 +57,7 @@
 		/>
 
 		<aside class="controls">
+			<LocationSearch on:select={handleLocationSelect} />
 			<LayerPanel />
 			<WatershedTool />
 			<CrossSectionTool />

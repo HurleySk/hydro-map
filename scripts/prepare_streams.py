@@ -43,7 +43,7 @@ from tqdm import tqdm
 @click.option(
     '--threshold', '-t',
     type=int,
-    default=1000,
+    default=100,
     help='Flow accumulation threshold for stream initiation (cells)'
 )
 @click.option(
@@ -103,12 +103,47 @@ def main(flow_acc, flow_dir, output, threshold, dem):
     click.echo("Converting to GeoPackage...")
     try:
         import geopandas as gpd
+        import rasterio
+        from rasterio.transform import rowcol
+        from shapely.geometry import Point
 
         streams_gdf = gpd.read_file(streams_vector)
 
-        # Add stream order by sampling the raster
-        # (This is a simplified version - you might want more sophisticated attribution)
-        streams_gdf['order'] = 1  # Placeholder
+        # WhiteboxTools doesn't create .prj files, so set CRS from flow direction raster
+        if streams_gdf.crs is None:
+            with rasterio.open(flow_dir_path) as src:
+                streams_gdf = streams_gdf.set_crs(src.crs)
+
+        # Add stream order by sampling the raster at stream midpoints
+        click.echo("  Sampling stream order...")
+        orders = []
+        with rasterio.open(stream_order) as src:
+            for idx, row in streams_gdf.iterrows():
+                # Get midpoint of stream segment
+                midpoint = row.geometry.interpolate(0.5, normalized=True)
+
+                # Transform to raster CRS if needed
+                if streams_gdf.crs != src.crs:
+                    midpoint_gdf = gpd.GeoDataFrame([1], geometry=[midpoint], crs=streams_gdf.crs)
+                    midpoint_proj = midpoint_gdf.to_crs(src.crs).geometry.values[0]
+                else:
+                    midpoint_proj = midpoint
+
+                # Sample raster at midpoint
+                r, c = rowcol(src.transform, midpoint_proj.x, midpoint_proj.y)
+
+                # Check bounds and read value
+                if 0 <= r < src.height and 0 <= c < src.width:
+                    order_value = src.read(1, window=((r, r+1), (c, c+1)))[0, 0]
+                    # Handle nodata
+                    if src.nodata is not None and order_value == src.nodata:
+                        order_value = 1
+                else:
+                    order_value = 1
+
+                orders.append(int(order_value))
+
+        streams_gdf['order'] = orders
 
         # Calculate length
         streams_gdf_proj = streams_gdf.to_crs("EPSG:6933")  # Equal Earth

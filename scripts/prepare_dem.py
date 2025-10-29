@@ -40,7 +40,7 @@ def main(input, output, breach):
     """Prepare DEM for hydrological analysis."""
 
     wbt = whitebox.WhiteboxTools()
-    wbt.set_verbose_mode(False)
+    wbt.set_verbose_mode(True)
 
     input_path = Path(input)
     output_dir = Path(output)
@@ -87,7 +87,7 @@ def main(input, output, breach):
         # Step 3: Flow accumulation
         pbar.set_description("Computing flow accumulation")
         wbt.d8_flow_accumulation(
-            input=str(filled_dem),
+            i=str(flow_dir),
             output=str(flow_acc),
             out_type="cells"
         )
