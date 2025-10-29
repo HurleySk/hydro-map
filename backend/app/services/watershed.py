@@ -7,8 +7,10 @@ This module provides functions for:
 - Computing watershed statistics
 """
 
+from collections import deque
 from pathlib import Path
 from typing import Dict, Optional, Tuple
+import asyncio
 import numpy as np
 import rasterio
 from rasterio.transform import rowcol
@@ -102,6 +104,13 @@ def calculate_distance_meters(
 
 
 async def snap_pour_point(lat: float, lon: float, radius: int = 100) -> Dict:
+    """
+    Async wrapper around the synchronous pour-point snapping routine.
+    """
+    return await asyncio.to_thread(_snap_pour_point_sync, lat, lon, radius)
+
+
+def _snap_pour_point_sync(lat: float, lon: float, radius: int = 100) -> Dict:
     """
     Snap a pour point to the nearest high-accumulation cell within a given radius.
 
@@ -318,11 +327,11 @@ def trace_watershed_d8(flow_dir: np.ndarray, outlet_row: int, outlet_col: int, n
     }
 
     # Breadth-first search to find all cells that flow to the outlet
-    queue = [(outlet_row, outlet_col)]
+    queue = deque([(outlet_row, outlet_col)])
     watershed[outlet_row, outlet_col] = True
 
     while queue:
-        r, c = queue.pop(0)
+        r, c = queue.popleft()
 
         # Check all 8 neighbors
         for direction, (dr, dc) in d8_lookup.items():
@@ -394,13 +403,12 @@ async def calculate_watershed_statistics(
         dem_path = Path(settings.DEM_PATH)
         if dem_path.exists():
             with rasterio.open(dem_path) as dem_src:
-                # Read DEM values within watershed
-                dem_data = dem_src.read(1)
-                watershed_elevations = dem_data[watershed_mask == 1]
+                # Read DEM values within watershed as a masked array to drop nodata efficiently
+                dem_data = dem_src.read(1, masked=True)
+                watershed_elevations = dem_data[np.asarray(watershed_mask, dtype=bool)]
 
-                # Mask nodata
-                if dem_src.nodata is not None:
-                    watershed_elevations = watershed_elevations[watershed_elevations != dem_src.nodata]
+                if np.ma.is_masked(watershed_elevations):
+                    watershed_elevations = watershed_elevations.compressed()
 
                 if len(watershed_elevations) > 0:
                     statistics.update({

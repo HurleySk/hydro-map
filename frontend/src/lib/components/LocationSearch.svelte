@@ -86,19 +86,40 @@
 		const items = showHistory ? $searchHistory : results;
 
 		if (event.key === 'ArrowDown') {
+			if (!items.length) {
+				return;
+			}
 			event.preventDefault();
 			selectedIndex = Math.min(selectedIndex + 1, items.length - 1);
-		} else if (event.key === 'ArrowUp') {
+			return;
+		}
+
+		if (event.key === 'ArrowUp') {
+			if (!items.length) {
+				return;
+			}
 			event.preventDefault();
 			selectedIndex = Math.max(selectedIndex - 1, 0);
-		} else if (event.key === 'Enter' && selectedIndex >= 0) {
+			return;
+		}
+
+		if (event.key === 'Enter' && selectedIndex >= 0) {
 			event.preventDefault();
 			if (showHistory) {
-				selectHistoryItem(items[selectedIndex]);
+				const historyItems = $searchHistory;
+				if (historyItems[selectedIndex]) {
+					selectHistoryItem(historyItems[selectedIndex]);
+				}
 			} else {
-				selectResult(items[selectedIndex]);
+				const resultItems = results;
+				if (resultItems[selectedIndex]) {
+					selectResult(resultItems[selectedIndex]);
+				}
 			}
-		} else if (event.key === 'Escape') {
+			return;
+		}
+
+		if (event.key === 'Escape') {
 			query = '';
 			results = [];
 			showResults = false;

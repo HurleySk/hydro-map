@@ -1,13 +1,13 @@
 <script lang="ts">
 	import { layers } from '$lib/stores';
 
-	const layerGroups = {
+	const layerGroups: Record<string, string[]> = {
 		'Terrain': ['hillshade', 'slope', 'aspect'],
 		'Hydrology': ['streams'],
 		'Geology': ['geology', 'contours']
 	};
 
-	const layerNames = {
+	const layerNames: Record<string, string> = {
 		hillshade: 'Hillshade',
 		slope: 'Slope',
 		aspect: 'Aspect',

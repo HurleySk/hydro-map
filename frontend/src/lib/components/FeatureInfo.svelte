@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { createEventDispatcher, onMount } from 'svelte';
+	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
 
 	export let location: { lng: number; lat: number };
 
@@ -8,6 +8,7 @@
 	let features: any = null;
 	let loading = true;
 	let error = false;
+	const controller = new AbortController();
 
 	onMount(async () => {
 		try {
@@ -18,7 +19,8 @@
 					lat: location.lat,
 					lon: location.lng,
 					buffer: 50
-				})
+				}),
+				signal: controller.signal
 			});
 
 			if (!response.ok) {
@@ -28,7 +30,10 @@
 			const result = await response.json();
 			features = result.features;
 			loading = false;
-		} catch (err) {
+		} catch (err: any) {
+			if (err?.name === 'AbortError') {
+				return;
+			}
 			console.error('Feature info error:', err);
 			error = true;
 			loading = false;
@@ -38,6 +43,10 @@
 	function close() {
 		dispatch('close');
 	}
+
+	onDestroy(() => {
+		controller.abort();
+	});
 </script>
 
 <div class="feature-info">

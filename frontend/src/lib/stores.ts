@@ -65,6 +65,9 @@ export const watersheds = writable<any[]>([]);
 // Cross-section data
 export const crossSection = writable<any>(null);
 
+// Cross-section line points being digitized
+export const crossSectionLine = writable<[number, number][]>([]);
+
 // Map view state with localStorage persistence
 export const mapView = createPersistedStore<MapViewState>('view', DEFAULT_MAP_VIEW);
 

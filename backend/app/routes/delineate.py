@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, Dict, Any
 import time
 
 from app.services.watershed import delineate_watershed, snap_pour_point
@@ -80,9 +80,10 @@ async def delineate(request: DelineationRequest):
         if settings.CACHE_ENABLED:
             cached_result = await get_cached_watershed(cache_key)
             if cached_result:
-                cached_result["metadata"]["from_cache"] = True
-                cached_result["metadata"]["processing_time"] = time.time() - start_time
-                return cached_result
+                return _hydrate_cached_response(
+                    cached_result,
+                    processing_time=time.time() - start_time
+                )
 
         # Step 3: Delineate watershed
         watershed_result = await delineate_watershed(
@@ -91,16 +92,14 @@ async def delineate(request: DelineationRequest):
         )
 
         # Step 4: Build response
-        response = {
-            "watershed": watershed_result["watershed"],
-            "pour_point": snapped_point,
-            "statistics": watershed_result["statistics"],
-            "metadata": {
-                "processing_time": time.time() - start_time,
-                "snap_radius": snap_radius if snap_to_stream else None,
-                "from_cache": False
-            }
-        }
+        response = _build_delineation_response(
+            watershed=watershed_result["watershed"],
+            pour_point=snapped_point,
+            statistics=watershed_result["statistics"],
+            processing_time=time.time() - start_time,
+            snap_radius=snap_radius if snap_to_stream else None,
+            from_cache=False
+        )
 
         # Step 5: Cache result
         if settings.CACHE_ENABLED:
@@ -147,3 +146,34 @@ async def delineation_status():
         "files": status,
         "cache_enabled": settings.CACHE_ENABLED
     }
+
+
+def _build_delineation_response(
+    watershed: Dict[str, Any],
+    pour_point: Dict[str, Any],
+    statistics: Dict[str, Any],
+    processing_time: float,
+    snap_radius: Optional[int],
+    from_cache: bool
+) -> Dict[str, Any]:
+    return {
+        "watershed": watershed,
+        "pour_point": pour_point,
+        "statistics": statistics,
+        "metadata": {
+            "processing_time": processing_time,
+            "snap_radius": snap_radius,
+            "from_cache": from_cache
+        }
+    }
+
+
+def _hydrate_cached_response(
+    cached_response: Dict[str, Any],
+    processing_time: float
+) -> Dict[str, Any]:
+    metadata = dict(cached_response.get("metadata", {}))
+    metadata["processing_time"] = processing_time
+    metadata["from_cache"] = True
+    cached_response["metadata"] = metadata
+    return cached_response

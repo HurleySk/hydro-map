@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { onMount, createEventDispatcher } from 'svelte';
+	import { get } from 'svelte/store';
 	import maplibregl from 'maplibre-gl';
+	import type { StyleSpecification } from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
 	import { Protocol } from 'pmtiles';
-	import { layers, watersheds, mapView } from '$lib/stores';
+	import { layers, watersheds, mapView, activeTool, crossSectionLine, crossSection } from '$lib/stores';
 
 	const dispatch = createEventDispatcher();
 
@@ -11,10 +13,14 @@
 	let map: maplibregl.Map;
 	let saveTimeout: number;
 	let searchMarker: maplibregl.Marker | null = null;
+	let unsubscribeLayers: () => void = () => {};
+	let unsubscribeWatersheds: () => void = () => {};
+	let unsubscribeCrossSection: () => void = () => {};
+	let clearWatershedsListener: () => void = () => {};
 
 	// Default center (adjust to your area of interest)
-	const DEFAULT_CENTER: [number, number] = [-77.1986, 38.8296]; // Mason District Park, Annandale, VA
-	const DEFAULT_ZOOM = 14;
+	const DEFAULT_CENTER: [number, number] = [-122.4194, 37.7749]; // San Francisco
+	const DEFAULT_ZOOM = 11;
 
 	onMount(() => {
 		// Register PMTiles protocol
@@ -44,6 +50,12 @@
 
 		// Handle click events
 		map.on('click', (e) => {
+			const tool = get(activeTool);
+			if (tool === 'cross-section') {
+				addCrossSectionPoint([e.lngLat.lng, e.lngLat.lat]);
+				return;
+			}
+
 			dispatch('click', {
 				lngLat: e.lngLat,
 				point: e.point
@@ -55,12 +67,29 @@
 		map.on('zoomend', saveMapView);
 
 		// Update layers when store changes
-		layers.subscribe(updateLayers);
+		unsubscribeLayers = layers.subscribe(updateLayers);
 
 		// Update watersheds layer when store changes
-		watersheds.subscribe(updateWatershedsLayer);
+		unsubscribeWatersheds = watersheds.subscribe(updateWatershedsLayer);
+
+		// Update cross-section layer when store changes
+		unsubscribeCrossSection = crossSectionLine.subscribe(updateCrossSectionLayer);
+
+		// Refresh rendered data once style is loaded
+		map.on('load', () => {
+			updateLayers(get(layers));
+			updateWatershedsLayer(get(watersheds));
+			updateCrossSectionLayer(get(crossSectionLine));
+		});
+
+		clearWatershedsListener = () => clearWatersheds();
+		window.addEventListener('clear-watersheds', clearWatershedsListener);
 
 		return () => {
+			window.removeEventListener('clear-watersheds', clearWatershedsListener);
+			unsubscribeLayers();
+			unsubscribeWatersheds();
+			unsubscribeCrossSection();
 			map.remove();
 			maplibregl.removeProtocol('pmtiles');
 		};
@@ -80,9 +109,9 @@
 		}, 500);
 	}
 
-	function createMapStyle() {
+	function createMapStyle(): StyleSpecification {
 		return {
-			version: 8,
+			version: 8 as 8,
 			sources: {
 				'base-map': {
 					type: 'raster',
@@ -113,6 +142,13 @@
 					url: 'pmtiles:///tiles/geology.pmtiles'
 				},
 				watersheds: {
+					type: 'geojson',
+					data: {
+						type: 'FeatureCollection',
+						features: []
+					}
+				},
+				'cross-section-line': {
 					type: 'geojson',
 					data: {
 						type: 'FeatureCollection',
@@ -204,6 +240,27 @@
 						'line-color': '#16a34a',
 						'line-width': 2
 					}
+				},
+				{
+					id: 'cross-section-line',
+					type: 'line',
+					source: 'cross-section-line',
+					paint: {
+						'line-color': '#f97316',
+						'line-width': 3
+					}
+				},
+				{
+					id: 'cross-section-points',
+					type: 'circle',
+					source: 'cross-section-line',
+					filter: ['==', ['geometry-type'], 'Point'],
+					paint: {
+						'circle-color': '#fb923c',
+						'circle-radius': 5,
+						'circle-stroke-width': 1,
+						'circle-stroke-color': '#ffffff'
+					}
 				}
 			]
 		};
@@ -232,12 +289,56 @@
 		if (!map || !map.isStyleLoaded()) return;
 
 		const source = map.getSource('watersheds') as maplibregl.GeoJSONSource;
-		if (source) {
-			source.setData({
-				type: 'FeatureCollection',
-				features: watershedsData
+		if (!source) return;
+
+		source.setData({
+			type: 'FeatureCollection',
+			features: watershedsData
+		});
+	}
+
+	function updateCrossSectionLayer(points: [number, number][]) {
+		if (!map || !map.isStyleLoaded()) return;
+
+		const source = map.getSource('cross-section-line') as maplibregl.GeoJSONSource;
+		if (!source) return;
+
+		const features: any[] = [];
+
+		if (points.length >= 2) {
+			features.push({
+				type: 'Feature',
+				geometry: {
+					type: 'LineString',
+					coordinates: points
+				},
+				properties: {}
 			});
 		}
+
+		points.forEach(([lon, lat], index) => {
+			features.push({
+				type: 'Feature',
+				geometry: {
+					type: 'Point',
+					coordinates: [lon, lat]
+				},
+				properties: { index }
+			});
+		});
+
+		source.setData({
+			type: 'FeatureCollection',
+			features
+		});
+	}
+
+	function addCrossSectionPoint(coord: [number, number]) {
+		crossSectionLine.update((points) => {
+			const next = [...points, coord];
+			crossSection.set(null);
+			return next;
+		});
 	}
 
 	// Fly to a location with smooth animation
@@ -292,40 +393,31 @@
 			const result = await response.json();
 
 			// Add watershed to map
-			const source = map.getSource('watersheds') as maplibregl.GeoJSONSource;
-			if (source) {
-				watersheds.update(w => [...w, result.watershed]);
+			const nextWatersheds = [...get(watersheds), result.watershed];
+			watersheds.set(nextWatersheds);
 
-				source.setData({
-					type: 'FeatureCollection',
-					features: [...$watersheds]
+			// Fit map to watershed bounds
+			const bounds = new maplibregl.LngLatBounds();
+			const geom = result.watershed.geometry;
+
+			// Handle both Polygon and MultiPolygon
+			if (geom.type === 'Polygon') {
+				geom.coordinates.forEach((ring: [number, number][]) => {
+					ring.forEach((coord: [number, number]) => {
+						bounds.extend(coord);
+					});
 				});
-
-				// Fit map to watershed bounds
-				const bounds = new maplibregl.LngLatBounds();
-				const geom = result.watershed.geometry;
-
-				// Handle both Polygon and MultiPolygon
-				if (geom.type === 'Polygon') {
-					// For Polygon, iterate all rings (outer + holes)
-					geom.coordinates.forEach((ring: [number, number][]) => {
+			} else if (geom.type === 'MultiPolygon') {
+				geom.coordinates.forEach((polygon: [number, number][][]) => {
+					polygon.forEach((ring: [number, number][]) => {
 						ring.forEach((coord: [number, number]) => {
 							bounds.extend(coord);
 						});
 					});
-				} else if (geom.type === 'MultiPolygon') {
-					// For MultiPolygon, iterate all polygons and their rings
-					geom.coordinates.forEach((polygon: [number, number][][]) => {
-						polygon.forEach((ring: [number, number][]) => {
-							ring.forEach((coord: [number, number]) => {
-								bounds.extend(coord);
-							});
-						});
-					});
-				}
-
-				map.fitBounds(bounds, { padding: 50 });
+				});
 			}
+
+			map.fitBounds(bounds, { padding: 50 });
 
 			return result;
 		} catch (error) {
@@ -336,13 +428,6 @@
 
 	export function clearWatersheds() {
 		watersheds.set([]);
-		const source = map.getSource('watersheds') as maplibregl.GeoJSONSource;
-		if (source) {
-			source.setData({
-				type: 'FeatureCollection',
-				features: []
-			});
-		}
 	}
 </script>
 

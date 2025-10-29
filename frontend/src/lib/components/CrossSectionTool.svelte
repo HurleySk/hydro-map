@@ -1,33 +1,38 @@
 <script lang="ts">
-	import { activeTool, crossSection } from '$lib/stores';
+	import { activeTool, crossSection, crossSectionLine } from '$lib/stores';
+	import { get } from 'svelte/store';
 
 	let isActive = false;
-	let isDrawing = false;
 	let linePoints: [number, number][] = [];
+
+	$: linePoints = $crossSectionLine;
 
 	function toggleTool() {
 		isActive = !isActive;
 		activeTool.set(isActive ? 'cross-section' : 'none');
 		if (!isActive) {
 			clearLine();
+		} else {
+			crossSectionLine.set([]);
+			crossSection.set(null);
 		}
 	}
 
 	function clearLine() {
-		linePoints = [];
-		isDrawing = false;
+		crossSectionLine.set([]);
 		crossSection.set(null);
 	}
 
 	async function generateProfile() {
-		if (linePoints.length < 2) return;
+		const line = get(crossSectionLine);
+		if (line.length < 2) return;
 
 		try {
 			const response = await fetch('/api/cross-section', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					line: linePoints
+					line
 				})
 			});
 
