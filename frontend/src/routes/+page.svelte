@@ -3,11 +3,12 @@
 	import Map from '$lib/components/Map.svelte';
 	import LayerPanel from '$lib/components/LayerPanel.svelte';
 	import LocationSearch from '$lib/components/LocationSearch.svelte';
-	import WatershedTool from '$lib/components/WatershedTool.svelte';
-	import CrossSectionTool from '$lib/components/CrossSectionTool.svelte';
-	import FeatureInfo from '$lib/components/FeatureInfo.svelte';
-	import FeatureInfoTool from '$lib/components/FeatureInfoTool.svelte';
-	import BaseMapToggle from '$lib/components/BaseMapToggle.svelte';
+import WatershedTool from '$lib/components/WatershedTool.svelte';
+import CrossSectionTool from '$lib/components/CrossSectionTool.svelte';
+import FeatureInfo from '$lib/components/FeatureInfo.svelte';
+import FeatureInfoTool from '$lib/components/FeatureInfoTool.svelte';
+import BaseMapToggle from '$lib/components/BaseMapToggle.svelte';
+import TileStatusPanel from '$lib/components/TileStatusPanel.svelte';
 	import { layers, activeTool } from '$lib/stores';
 
 	let mapComponent: any;
@@ -65,6 +66,7 @@
 			<FeatureInfoTool />
 			<WatershedTool />
 			<CrossSectionTool />
+ 			<TileStatusPanel />
 		</aside>
 
 		{#if selectedFeature}

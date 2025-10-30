@@ -47,7 +47,13 @@ from tqdm import tqdm
     default=14,
     help='Maximum zoom level'
 )
-def main(data_dir, output_dir, min_zoom, max_zoom):
+@click.option(
+    '--contour-interval',
+    type=int,
+    default=10,
+    help='Contour interval in meters (default: 10)'
+)
+def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval):
     """Generate PMTiles from processed data."""
 
     data_path = Path(data_dir)
@@ -78,10 +84,33 @@ def main(data_dir, output_dir, min_zoom, max_zoom):
         else:
             click.echo(f"Warning: {name} not found at {raster_file}")
 
-    # Vector tiles (streams, geology)
+    # Generate contours from filled DEM
+    filled_dem = data_path / 'dem' / 'filled_dem.tif'
+    contours_gpkg = data_path / 'contours.gpkg'
+
+    if filled_dem.exists():
+        click.echo(f"\nGenerating contours (interval: {contour_interval}m)...")
+        try:
+            subprocess.run([
+                'gdal_contour',
+                '-a', 'elevation',
+                '-i', str(contour_interval),
+                str(filled_dem),
+                str(contours_gpkg)
+            ], check=True, capture_output=True)
+            click.echo(f"  Created {contours_gpkg}")
+        except subprocess.CalledProcessError as e:
+            click.echo(f"  Error generating contours: {e}")
+        except FileNotFoundError:
+            click.echo(f"  Error: gdal_contour not found. Install GDAL.")
+    else:
+        click.echo(f"\nWarning: Filled DEM not found at {filled_dem}, skipping contours")
+
+    # Vector tiles (streams, geology, contours)
     vector_files = {
         'streams': data_path / 'streams.gpkg',
         'geology': data_path / 'geology.gpkg',
+        'contours': contours_gpkg,
     }
 
     for name, vector_file in vector_files.items():

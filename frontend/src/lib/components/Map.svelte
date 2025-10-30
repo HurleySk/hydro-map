@@ -4,7 +4,7 @@
 	import maplibregl from 'maplibre-gl';
 	import type { StyleSpecification } from 'maplibre-gl';
 	import 'maplibre-gl/dist/maplibre-gl.css';
-	import { Protocol } from 'pmtiles';
+import { Protocol, PMTiles } from 'pmtiles';
 import {
 	layers,
 	watersheds,
@@ -15,7 +15,8 @@ import {
 	watershedOutlets,
 	latestDelineation,
 	delineationSettings,
-	basemapStyle
+	basemapStyle,
+	tileStatus
 } from '$lib/stores';
 
 	const dispatch = createEventDispatcher();
@@ -30,14 +31,91 @@ let unsubscribeCrossSection: () => void = () => {};
 let unsubscribeOutlets: () => void = () => {};
 let unsubscribeBasemap: () => void = () => {};
 
+type TileHeaderBounds = {
+	minLon: number;
+	minLat: number;
+	maxLon: number;
+	maxLat: number;
+};
+
+type TileMeta = {
+	url: string;
+	header?: TileHeaderBounds;
+	error?: string;
+};
+
+const tileSources = [
+	{ id: 'hillshade', label: 'Hillshade', filename: 'hillshade.pmtiles' },
+	{ id: 'slope', label: 'Slope', filename: 'slope.pmtiles' },
+	{ id: 'aspect', label: 'Aspect', filename: 'aspect.pmtiles' },
+	{ id: 'streams', label: 'Streams', filename: 'streams.pmtiles' },
+	{ id: 'geology', label: 'Geology', filename: 'geology.pmtiles' },
+	{ id: 'contours', label: 'Contours', filename: 'contours.pmtiles' }
+];
+
+const tileMetadata = new Map<string, TileMeta>();
+
+let tileBasePath = '/tiles';
+let pmtilesBasePrefix = 'pmtiles:///tiles';
+let pmtilesProtocol: Protocol | null = null;
+let tileStatusInitialized = false;
+
+function buildTileHttpUrl(filename: string): string {
+	const base = tileBasePath.endsWith('/') ? tileBasePath.slice(0, -1) : tileBasePath;
+	const path = `${base}/${filename}`;
+	if (/^https?:\/\//.test(path)) {
+		return path;
+	}
+	if (typeof window !== 'undefined') {
+		return new URL(path, window.location.origin).toString();
+	}
+	return path;
+}
+
+function buildPmtilesUrl(filename: string): string {
+	const base = pmtilesBasePrefix.endsWith('/') ? pmtilesBasePrefix.slice(0, -1) : pmtilesBasePrefix;
+	return `${base}/${filename}`;
+}
+
+function headerToBounds(header: any): TileHeaderBounds {
+	const minLon = header.minLonE7 !== undefined ? header.minLonE7 / 1e7 : header.minLon ?? -180;
+	const minLat = header.minLatE7 !== undefined ? header.minLatE7 / 1e7 : header.minLat ?? -90;
+	const maxLon = header.maxLonE7 !== undefined ? header.maxLonE7 / 1e7 : header.maxLon ?? 180;
+	const maxLat = header.maxLatE7 !== undefined ? header.maxLatE7 / 1e7 : header.maxLat ?? 90;
+	return { minLon, minLat, maxLon, maxLat };
+}
+
 	// Default center (adjusted to Mason District Park, Annandale, VA)
 	const DEFAULT_CENTER: [number, number] = [-77.204, 38.836];
 	const DEFAULT_ZOOM = 14;
 
-	onMount(() => {
+	onMount(async () => {
+		const envBase = (import.meta.env.VITE_TILE_BASE ?? import.meta.env.VITE_API_URL ?? '') as string;
+		const devDefault = typeof window !== 'undefined'
+			? (window.location.port === '5173' ? 'http://localhost:8000' : window.location.origin)
+			: '';
+		const backendBaseRaw = envBase || devDefault;
+		const backendBase = backendBaseRaw ? backendBaseRaw.replace(/\/$/, '') : '';
+		if (backendBase) {
+			tileBasePath = `${backendBase}/tiles`;
+			pmtilesBasePrefix = `pmtiles://${backendBase}/tiles`;
+		} else if (typeof window !== 'undefined') {
+			const origin = window.location.origin.replace(/\/$/, '');
+			tileBasePath = '/tiles';
+			pmtilesBasePrefix = `pmtiles://${origin}/tiles`;
+		} else {
+			tileBasePath = '/tiles';
+			pmtilesBasePrefix = 'pmtiles:///tiles';
+		}
+
 		// Register PMTiles protocol
 		const protocol = new Protocol();
 		maplibregl.addProtocol('pmtiles', protocol.tile);
+		pmtilesProtocol = protocol;
+
+		// Initialize PMTiles instances BEFORE creating map
+		// This ensures Protocol has all instances registered when MapLibre tries to resolve pmtiles:// URLs
+		await initializeTileStatus();
 
 		// Get saved view or use defaults
 		const savedView = $mapView;
@@ -100,10 +178,14 @@ let unsubscribeBasemap: () => void = () => {};
 			updateCrossSectionLayer(get(crossSectionLine));
 			updateOutletLayer(get(watershedOutlets));
 			updateBasemap(get(basemapStyle));
+			updateTileStatusForCenter();
 		});
 
+		map.on('moveend', updateTileStatusForCenter);
+
 		return () => {
-			unsubscribeLayers();
+		map.off('moveend', updateTileStatusForCenter);
+		unsubscribeLayers();
 			unsubscribeWatersheds();
 			unsubscribeCrossSection();
 			unsubscribeOutlets();
@@ -147,26 +229,26 @@ let unsubscribeBasemap: () => void = () => {};
 					tileSize: 256,
 					attribution: '© OpenStreetMap contributors, © CARTO'
 				},
-				hillshade: {
-					type: 'raster',
-					url: 'pmtiles:///tiles/hillshade.pmtiles'
-				},
-				slope: {
-					type: 'raster',
-					url: 'pmtiles:///tiles/slope.pmtiles'
-				},
-				aspect: {
-					type: 'raster',
-					url: 'pmtiles:///tiles/aspect.pmtiles'
-				},
-				streams: {
-					type: 'vector',
-					url: 'pmtiles:///tiles/streams.pmtiles'
-				},
-				// geology: {  // No geology data available
-				// 	type: 'vector',
-				// 	url: 'pmtiles:///tiles/geology.pmtiles'
-				// },
+			hillshade: {
+				type: 'raster',
+				url: buildPmtilesUrl('hillshade.pmtiles')
+			},
+			slope: {
+				type: 'raster',
+				url: buildPmtilesUrl('slope.pmtiles')
+			},
+			aspect: {
+				type: 'raster',
+				url: buildPmtilesUrl('aspect.pmtiles')
+			},
+			streams: {
+				type: 'vector',
+				url: buildPmtilesUrl('streams.pmtiles')
+			},
+			// geology: {  // No geology data available
+			// 	type: 'vector',
+			// 	url: buildPmtilesUrl('geology.pmtiles')
+			// },
 				watersheds: {
 					type: 'geojson',
 					data: {
@@ -188,11 +270,11 @@ let unsubscribeBasemap: () => void = () => {};
 						features: []
 					}
 				},
-				contours: {
-					type: 'vector',
-					url: 'pmtiles:///tiles/contours.pmtiles'
-				}
-			},
+			contours: {
+				type: 'vector',
+				url: buildPmtilesUrl('contours.pmtiles')
+			}
+		},
 			layers: [
 				{
 					id: 'base-osm',
@@ -384,6 +466,92 @@ function updateBasemap(style: 'osm' | 'light') {
 	if (map.getLayer('base-light')) {
 		map.setLayoutProperty('base-light', 'visibility', style === 'light' ? 'visible' : 'none');
 	}
+}
+
+async function initializeTileStatus() {
+	if (tileStatusInitialized || typeof window === 'undefined') {
+		return;
+	}
+	tileStatusInitialized = true;
+	tileStatus.set(tileSources.map((src) => ({ id: src.id, label: src.label, available: false, message: 'Checking…' })));
+
+	await Promise.all(tileSources.map(async (src) => {
+		const absoluteUrl = buildTileHttpUrl(src.filename);
+
+		try {
+			const headResponse = await fetch(absoluteUrl, { method: 'HEAD', cache: 'no-store' });
+			if (!headResponse.ok) {
+				tileMetadata.set(src.id, { url: absoluteUrl, error: `HTTP ${headResponse.status}` });
+				return;
+			}
+		}
+		catch (error) {
+			tileMetadata.set(src.id, { url: absoluteUrl, error: 'Not reachable (is the backend serving /tiles?)' });
+			return;
+		}
+
+		try {
+			const pmtiles = new PMTiles(absoluteUrl);
+			const header = await pmtiles.getHeader();
+			tileMetadata.set(src.id, { url: absoluteUrl, header: headerToBounds(header) });
+			pmtilesProtocol?.add(pmtiles);
+		} catch (error) {
+			tileMetadata.set(src.id, {
+				url: absoluteUrl,
+				header: undefined,
+				error: undefined
+			});
+		}
+	}));
+
+	updateTileStatusForCenter();
+}
+
+function updateTileStatusForCenter() {
+	if (!map || !tileStatusInitialized) {
+		return;
+	}
+
+	const center = map.getCenter();
+	const statuses = tileSources.map((src) => {
+		const meta = tileMetadata.get(src.id);
+		if (!meta) {
+			return { id: src.id, label: src.label, available: false, message: 'Checking…' };
+		}
+
+		if (meta.error) {
+			const fallback = meta.error === 'HTTP 404'
+				? 'File not found. Regenerate tiles or copy them into data/tiles/. '
+				: meta.error;
+			return { id: src.id, label: src.label, available: false, message: fallback };
+		}
+
+		if (!meta.header) {
+			return {
+				id: src.id,
+				label: src.label,
+				available: true,
+				message: 'File reachable (coverage unknown – metadata missing)'
+			};
+		}
+
+		const within =
+			center.lng >= meta.header.minLon &&
+			center.lng <= meta.header.maxLon &&
+			center.lat >= meta.header.minLat &&
+			center.lat <= meta.header.maxLat;
+
+		return {
+			id: src.id,
+			label: src.label,
+			available: within,
+			message: within
+				? 'Available in current view'
+				: `No coverage at ${center.lat.toFixed(3)}, ${center.lng.toFixed(3)}`
+		};
+	});
+
+	tileStatus.set(statuses);
 }
 
 function updateCrossSectionLayer(points: [number, number][]) {

@@ -89,6 +89,15 @@ export const delineationSettings = writable<DelineationSettings>({
 export type BasemapStyle = 'osm' | 'light';
 export const basemapStyle = writable<BasemapStyle>('osm');
 
+export interface TileStatusItem {
+	id: string;
+	label: string;
+	available: boolean;
+	message?: string;
+}
+
+export const tileStatus = writable<TileStatusItem[]>([]);
+
 // Map view state with localStorage persistence
 export const mapView = createPersistedStore<MapViewState>('view', DEFAULT_MAP_VIEW);
 

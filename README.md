@@ -67,6 +67,7 @@ hydro-map/
    cp .env.example .env
    # Edit .env to configure paths and settings
    ```
+   - Optional: create `frontend/.env` with `VITE_TILE_BASE=http://localhost:8000` so the dev frontend fetches PMTiles directly from the backend (avoids proxy issues with range requests).
 
 3. **Install backend dependencies**
    ```bash
@@ -200,7 +201,7 @@ Click **Feature Info** mode and click the map to see attributes of:
 
 ### Layer Visibility Checklist
 
-If overlays appear unchanged:
+Use the **Tile Status** panel in the left controls to confirm whether each PMTiles source covers the current map view. Additionally, the following manual checks can help:
 
 1. **Tiles reachable?**  
    Check DevTools → Network for `/tiles/*.pmtiles` requests. A `404` or `502` means the backend isn’t serving the files.
