@@ -11,7 +11,7 @@ Usage:
 import click
 from pathlib import Path
 import geopandas as gpd
-from shapely.geometry import box
+from shapely.geometry import box, LineString, MultiLineString
 
 
 @click.command()
@@ -71,20 +71,25 @@ def main(input, output, bounds):
     #   33600 = CanalDitch (EXCLUDE)
     #   42800 = Pipeline (EXCLUDE)
 
-    click.echo("\nFiltering to natural streams...")
+    click.echo("\nFiltering to valid stream FCodes...")
     natural_stream_codes = [46000, 46003, 46006, 46007]
+    connector_codes = [55800, 33600]  # artificial paths / canals used as connectors
+    valid_codes = natural_stream_codes + connector_codes
 
     if 'FCode' in streams_gdf.columns:
         original_count = len(streams_gdf)
-        streams_gdf = streams_gdf[streams_gdf['FCode'].isin(natural_stream_codes)]
-        click.echo(f"  Filtered {original_count} -> {len(streams_gdf)} features")
-        click.echo(f"  Removed {original_count - len(streams_gdf)} artificial paths/connectors")
+        streams_gdf = streams_gdf[streams_gdf['FCode'].isin(valid_codes)]
+        click.echo(f"  Filtered {original_count} -> {len(streams_gdf)} including natural and connector flows")
     else:
         click.echo("  Warning: FCode field not found, keeping all features")
 
     if len(streams_gdf) == 0:
-        click.echo("Error: No natural streams found after filtering")
+        click.echo("Error: No valid streams found after filtering")
         return 1
+
+    streams_gdf['is_connector'] = False
+    if 'FCode' in streams_gdf.columns:
+        streams_gdf.loc[streams_gdf['FCode'].isin(connector_codes), 'is_connector'] = True
 
     # Join with NHDPlusFlowlineVAA table for enriched attributes
     click.echo("\nJoining NHDPlusFlowlineVAA attributes...")
@@ -158,9 +163,10 @@ def main(input, output, bounds):
 
     if 'FCode' in streams_gdf.columns:
         streams_gdf['stream_type'] = streams_gdf['FCode'].map(fcode_to_type)
+        streams_gdf.loc[streams_gdf['is_connector'], 'stream_type'] = 'Connector'
 
     # Select and rename key fields for simplicity
-    fields_to_keep = ['geometry', 'length_m', 'length_km', 'order', 'stream_type']
+    fields_to_keep = ['geometry', 'length_m', 'length_km', 'order', 'stream_type', 'is_connector']
 
     # Keep VAA attributes
     vaa_fields = ['drainage_area_sqkm', 'stream_order', 'upstream_length_km', 'slope', 'max_elev_m', 'min_elev_m']
@@ -178,13 +184,41 @@ def main(input, output, bounds):
         streams_gdf['nhd_id'] = streams_gdf['Permanent_Identifier']
         fields_to_keep.append('nhd_id')
 
+    # Ensure geometry is 2D (drop Z values) for downstream processing
+    def to_2d(geom):
+        if geom is None:
+            return geom
+        if geom.geom_type == 'LineString':
+            return LineString([(x, y) for x, y, *_ in geom.coords])
+        if geom.geom_type == 'MultiLineString':
+            return MultiLineString([LineString([(x, y) for x, y, *_ in line.coords]) for line in geom.geoms])
+        return geom
+
+    streams_gdf['geometry'] = streams_gdf.geometry.apply(to_2d)
+
     # Select final fields
     available_fields = [f for f in fields_to_keep if f in streams_gdf.columns or f == 'geometry']
     streams_final = streams_gdf[available_fields].copy()
 
+    # Split natural vs connector
+    natural_streams = streams_final[~streams_final['is_connector']].copy()
+    if natural_streams.empty:
+        click.echo("Warning: No natural streams after filtering; all streams will be treated as connectors.")
+        natural_streams = streams_final.copy()
+
+    # Explode geometries for merged layer
+    streams_merged = streams_final.copy()
+    streams_merged = streams_merged.explode(index_parts=False).reset_index(drop=True)
+    # Recompute lengths after explode for accuracy
+    streams_merged_proj = streams_merged.to_crs("EPSG:6933")
+    streams_merged['length_m'] = streams_merged_proj.geometry.length
+    streams_merged['length_km'] = streams_merged['length_m'] / 1000
+    streams_merged = streams_merged.to_crs("EPSG:4326")
+
     # Save to GeoPackage
     click.echo(f"\nSaving to {output_path}...")
-    streams_final.to_file(output_path, driver='GPKG', layer='streams')
+    natural_streams.to_file(output_path, driver='GPKG', layer='streams')
+    streams_merged.to_file(output_path, driver='GPKG', layer='streams_merged')
 
     # Print summary statistics
     click.echo("\n" + "="*60)

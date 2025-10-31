@@ -240,14 +240,28 @@ def generate_vector_pmtiles(
         click.echo(f"  Generating vector tiles with Tippecanoe...")
 
         # Convert to GeoJSON if needed
+        source_layer = layer_name
         if input_file.suffix == '.gpkg':
+            # Prefer exploded/merged layers when available for additional detail
+            if layer_name == 'streams':
+                candidate = 'streams_merged'
+                try:
+                    subprocess.run(
+                        ['ogrinfo', str(input_file), candidate],
+                        check=True,
+                        capture_output=True
+                    )
+                    source_layer = candidate
+                except subprocess.CalledProcessError:
+                    source_layer = layer_name
+
             temp_geojson = output_file.parent / f"{input_file.stem}.geojson"
             subprocess.run([
                 'ogr2ogr',
                 '-f', 'GeoJSON',
                 str(temp_geojson),
                 str(input_file),
-                layer_name  # Specify which layer to export from GPKG
+                source_layer  # Specify which layer to export from GPKG
             ], check=True, capture_output=True)
             input_for_tippecanoe = temp_geojson
         else:

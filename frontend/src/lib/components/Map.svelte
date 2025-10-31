@@ -92,8 +92,8 @@ function headerToBounds(header: any): TileHeaderBounds {
 }
 
 	// Default center (adjusted to Mason District Park, Annandale, VA)
-	const DEFAULT_CENTER: [number, number] = [-77.204, 38.836];
-	const DEFAULT_ZOOM = 14;
+	const DEFAULT_CENTER: [number, number] = [-77.2045, 38.8358];
+	const DEFAULT_ZOOM = 17;
 
 	onMount(() => {
 		let destroy: (() => void) | undefined;
