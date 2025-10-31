@@ -74,6 +74,7 @@ data/processed/contours.gpkg
 data/tiles/*.geojson
 data/tiles/*.pmtiles
 data/tiles/*.mbtiles
+data/tiles/temp_tiles/
 # Allow placeholder keep files
 !data/processed/.gitkeep
 !data/tiles/.gitkeep
