@@ -119,7 +119,6 @@ Before running the application, you need to prepare your data:
      --contour-interval 2
    ```
    - By default the script emits 1 m contour isolines; the example above passes `--contour-interval 2`, which pairs well with the 200 m/100 m target scale. Adjust `--max-zoom` or `--contour-interval` to suit your DEM resolution and styling goals.
-   - By default the script emits 1 m contour isolines; the example above passes `--contour-interval 2`, which pairs well with the 200 m/100 m target scale. Adjust `--max-zoom` or `--contour-interval` to suit your DEM resolution and styling goals.
    - Use the new `--raster-resampling` flag (default: `lanczos`) to fine-tune raster sharpness—switch to `nearest` for categorical rasters such as aspect or landcover.
 
 4. **(Optional) Add geology data**
@@ -200,7 +199,7 @@ Click **Feature Info** mode and click the map to see attributes of:
 
 ### Basemap & Visibility Tools
 
-- Switch between the default color basemap and a light-gray background via the **Basemap** panel for better overlay contrast.
+- Switch between the default color basemap, a light-gray background, or hide the basemap entirely via the **Basemap** panel for better overlay control.
 - The layer checklist reflects live MapLibre state—if toggling a layer has no visual effect, confirm the PMTiles exist for the current extent (see troubleshooting below).
 - The **Tile Status** panel automatically checks reachability and coverage for each PMTiles source whenever you pan or zoom.
 
