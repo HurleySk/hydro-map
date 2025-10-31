@@ -1,11 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import os
 from pathlib import Path
 
-from app.routes import delineate, cross_section, features
+from app.routes import delineate, cross_section, features, tiles
 from app.config import settings
 
 
@@ -48,10 +47,8 @@ app.include_router(delineate.router, prefix="/api", tags=["delineate"])
 app.include_router(cross_section.router, prefix="/api", tags=["cross-section"])
 app.include_router(features.router, prefix="/api", tags=["features"])
 
-# Serve PMTiles from data/tiles directory
-tiles_path = Path(__file__).parent.parent.parent / "data" / "tiles"
-if tiles_path.exists():
-    app.mount("/tiles", StaticFiles(directory=str(tiles_path)), name="tiles")
+# Include tiles router for PMTiles serving with range request support
+app.include_router(tiles.router)
 
 
 @app.get("/")

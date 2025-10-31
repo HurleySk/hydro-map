@@ -86,7 +86,7 @@ export const delineationSettings = writable<DelineationSettings>({
 });
 
 // Basemap style selection
-export type BasemapStyle = 'osm' | 'light';
+export type BasemapStyle = 'osm' | 'light' | 'none';
 export const basemapStyle = writable<BasemapStyle>('osm');
 
 export interface TileStatusItem {

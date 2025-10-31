@@ -30,6 +30,9 @@ let unsubscribeWatersheds: () => void = () => {};
 let unsubscribeCrossSection: () => void = () => {};
 let unsubscribeOutlets: () => void = () => {};
 let unsubscribeBasemap: () => void = () => {};
+let mapReady = false; // Track when map is fully initialized
+let styleReady = false; // Track when style graph is ready
+let updateQueue: Array<{ type: string; data: any }> = []; // Queue for updates before style ready
 
 type TileHeaderBounds = {
 	minLon: number;
@@ -89,8 +92,12 @@ function headerToBounds(header: any): TileHeaderBounds {
 	const DEFAULT_CENTER: [number, number] = [-77.204, 38.836];
 	const DEFAULT_ZOOM = 14;
 
-	onMount(async () => {
-		const envBase = (import.meta.env.VITE_TILE_BASE ?? import.meta.env.VITE_API_URL ?? '') as string;
+	onMount(() => {
+		let destroy: (() => void) | undefined;
+
+		// Run async initialization without making the onMount callback async
+		(async () => {
+			const envBase = (import.meta.env.VITE_TILE_BASE ?? import.meta.env.VITE_API_URL ?? '') as string;
 		const devDefault = typeof window !== 'undefined'
 			? (window.location.port === '5173' ? 'http://localhost:8000' : window.location.origin)
 			: '';
@@ -108,19 +115,48 @@ function headerToBounds(header: any): TileHeaderBounds {
 			pmtilesBasePrefix = 'pmtiles:///tiles';
 		}
 
-		// Register PMTiles protocol
-		const protocol = new Protocol();
-		maplibregl.addProtocol('pmtiles', protocol.tile);
-		pmtilesProtocol = protocol;
+			// Register PMTiles protocol
+			const protocol = new Protocol({ metadata: true });
+			maplibregl.addProtocol('pmtiles', protocol.tile);
+			pmtilesProtocol = protocol;
 
-		// Initialize PMTiles instances BEFORE creating map
-		// This ensures Protocol has all instances registered when MapLibre tries to resolve pmtiles:// URLs
-		await initializeTileStatus();
+			// Initialize PMTiles instances BEFORE creating map
+			// This ensures Protocol has all instances registered when MapLibre tries to resolve pmtiles:// URLs
+			await initializeTileStatus();
 
-		// Get saved view or use defaults
-		const savedView = $mapView;
-		const initialCenter = savedView?.center || DEFAULT_CENTER;
-		const initialZoom = savedView?.zoom || DEFAULT_ZOOM;
+			// Get saved view or use defaults
+			const savedView = $mapView;
+			let initialCenter = savedView?.center || DEFAULT_CENTER;
+			const initialZoom = savedView?.zoom || DEFAULT_ZOOM;
+
+			// If current center is outside any tile coverage, recenter to data
+			const centerWithinCoverage = () => {
+				for (const meta of tileMetadata.values()) {
+					if (meta.header) {
+						const { minLon, minLat, maxLon, maxLat } = meta.header;
+						if (
+							initialCenter[0] >= minLon &&
+							initialCenter[0] <= maxLon &&
+							initialCenter[1] >= minLat &&
+							initialCenter[1] <= maxLat
+						) {
+							return true;
+						}
+					}
+				}
+				return false;
+			};
+
+			if (!centerWithinCoverage()) {
+				// Prefer streams coverage if available, else any available header
+				const preferred = tileMetadata.get('streams')?.header || Array.from(tileMetadata.values()).find(m => m.header)?.header;
+				if (preferred) {
+					initialCenter = [
+						(preferred.minLon + preferred.maxLon) / 2,
+						(preferred.minLat + preferred.maxLat) / 2
+					];
+				}
+			}
 
 		// Initialize map
 		map = new maplibregl.Map({
@@ -137,6 +173,8 @@ function headerToBounds(header: any): TileHeaderBounds {
 		// Add controls
 		map.addControl(new maplibregl.NavigationControl(), 'top-right');
 		map.addControl(new maplibregl.ScaleControl(), 'bottom-right');
+
+			// Removed redundant setTimeout - initialization is handled on the 'load' event
 
 		// Handle click events
 		map.on('click', (e) => {
@@ -156,42 +194,121 @@ function headerToBounds(header: any): TileHeaderBounds {
 		map.on('moveend', saveMapView);
 		map.on('zoomend', saveMapView);
 
-		// Update layers when store changes
-		unsubscribeLayers = layers.subscribe(updateLayers);
+		// Initialize once the style has loaded. Avoid relying on 'idle', which can
+		// hang indefinitely if any source never finishes loading.
+		// Subscribe immediately without waiting for map ready events
+		console.log('[Map] Setting up store subscriptions immediately');
+		unsubscribeLayers = layers.subscribe((state) => {
+			console.log('[debug] layers store changed:', state);
+			if (styleReady) {
+				applyLayerState(state);
+			} else {
+				console.log('[Map] Queuing layer update for when style is ready');
+				updateQueue.push({ type: 'layers', data: state });
+			}
+		});
 
-		// Update watersheds layer when store changes
-		unsubscribeWatersheds = watersheds.subscribe(updateWatershedsLayer);
+		unsubscribeWatersheds = watersheds.subscribe((state) => {
+			if (styleReady) {
+				updateWatershedsLayer(state);
+			} else {
+				updateQueue.push({ type: 'watersheds', data: state });
+			}
+		});
 
-		// Update cross-section layer when store changes
-		unsubscribeCrossSection = crossSectionLine.subscribe(updateCrossSectionLayer);
+		unsubscribeCrossSection = crossSectionLine.subscribe((state) => {
+			if (styleReady) {
+				updateCrossSectionLayer(state);
+			} else {
+				updateQueue.push({ type: 'crossSection', data: state });
+			}
+		});
 
-		// Update outlets layer when store changes
-		unsubscribeOutlets = watershedOutlets.subscribe(updateOutletLayer);
+		unsubscribeOutlets = watershedOutlets.subscribe((state) => {
+			if (styleReady) {
+				updateOutletLayer(state);
+			} else {
+				updateQueue.push({ type: 'outlets', data: state });
+			}
+		});
 
-		// Update basemap selection
-		unsubscribeBasemap = basemapStyle.subscribe(updateBasemap);
+		unsubscribeBasemap = basemapStyle.subscribe((state) => {
+			if (styleReady) {
+				updateBasemap(state);
+			} else {
+				updateQueue.push({ type: 'basemap', data: state });
+			}
+		});
 
-		// Refresh rendered data once style is loaded
-		map.on('load', () => {
-			updateLayers(get(layers));
-			updateWatershedsLayer(get(watersheds));
-			updateCrossSectionLayer(get(crossSectionLine));
-			updateOutletLayer(get(watershedOutlets));
-			updateBasemap(get(basemapStyle));
+		// Add diagnostic event logging
+		map.on('style.load', () => {
+			console.log('[Map] style.load event fired - style graph ready');
+			styleReady = true;
+			mapReady = true;
+			processUpdateQueue();
 			updateTileStatusForCenter();
 		});
 
-		map.on('moveend', updateTileStatusForCenter);
+		map.on('styledata', () => {
+			console.log('[Map] styledata event fired');
+		});
+
+		map.on('sourcedata', (e) => {
+			console.log('[Map] sourcedata event fired for:', e.sourceId);
+		});
+
+		map.on('load', () => {
+			console.log('[Map] load event fired - all initial sources loaded');
+		});
+
+		map.on('idle', () => {
+			console.log('[Map] idle event fired - rendering complete');
+		});
+
+		// Process queued updates
+		function processUpdateQueue() {
+			console.log(`[Map] Processing ${updateQueue.length} queued updates`);
+			const queue = [...updateQueue];
+			updateQueue = [];
+
+			for (const update of queue) {
+				switch (update.type) {
+					case 'layers':
+						applyLayerState(update.data);
+						break;
+					case 'watersheds':
+						updateWatershedsLayer(update.data);
+						break;
+					case 'crossSection':
+						updateCrossSectionLayer(update.data);
+						break;
+					case 'outlets':
+						updateOutletLayer(update.data);
+						break;
+					case 'basemap':
+						updateBasemap(update.data);
+						break;
+				}
+			}
+		}
+
+			map.on('moveend', updateTileStatusForCenter);
+
+			// Define cleanup now that map is initialized
+			destroy = () => {
+				map.off('moveend', updateTileStatusForCenter);
+				unsubscribeLayers();
+				unsubscribeWatersheds();
+				unsubscribeCrossSection();
+				unsubscribeOutlets();
+				unsubscribeBasemap();
+				map.remove();
+				maplibregl.removeProtocol('pmtiles');
+			};
+		})();
 
 		return () => {
-		map.off('moveend', updateTileStatusForCenter);
-		unsubscribeLayers();
-			unsubscribeWatersheds();
-			unsubscribeCrossSection();
-			unsubscribeOutlets();
-			unsubscribeBasemap();
-			map.remove();
-			maplibregl.removeProtocol('pmtiles');
+			if (destroy) destroy();
 		};
 	});
 
@@ -210,6 +327,9 @@ function headerToBounds(header: any): TileHeaderBounds {
 	}
 
 	function createMapStyle(): StyleSpecification {
+		// Note: Layer visibility is handled entirely by updateLayers()
+		// All layers start as 'visible' and updateLayers sets the correct state
+
 		return {
 			version: 8 as 8,
 			sources: {
@@ -229,17 +349,27 @@ function headerToBounds(header: any): TileHeaderBounds {
 					tileSize: 256,
 					attribution: '© OpenStreetMap contributors, © CARTO'
 				},
+				'base-none': {
+					type: 'geojson',
+					data: {
+						type: 'FeatureCollection',
+						features: []
+					}
+				},
 			hillshade: {
 				type: 'raster',
-				url: buildPmtilesUrl('hillshade.pmtiles')
+				url: buildPmtilesUrl('hillshade.pmtiles'),
+				tileSize: 256
 			},
 			slope: {
 				type: 'raster',
-				url: buildPmtilesUrl('slope.pmtiles')
+				url: buildPmtilesUrl('slope.pmtiles'),
+				tileSize: 256
 			},
 			aspect: {
 				type: 'raster',
-				url: buildPmtilesUrl('aspect.pmtiles')
+				url: buildPmtilesUrl('aspect.pmtiles'),
+				tileSize: 256
 			},
 			streams: {
 				type: 'vector',
@@ -289,6 +419,12 @@ function headerToBounds(header: any): TileHeaderBounds {
 					layout: { visibility: 'none' }
 				},
 				{
+					id: 'base-none',
+					type: 'background',
+					layout: { visibility: 'none' },
+					paint: { 'background-color': '#f8f8f8' }
+				},
+				{
 					id: 'hillshade',
 					type: 'raster',
 					source: 'hillshade',
@@ -299,14 +435,14 @@ function headerToBounds(header: any): TileHeaderBounds {
 					id: 'slope',
 					type: 'raster',
 					source: 'slope',
-					layout: { visibility: 'none' },
+					layout: { visibility: 'visible' },
 					paint: { 'raster-opacity': 0.7 }
 				},
 				{
 					id: 'aspect',
 					type: 'raster',
 					source: 'aspect',
-					layout: { visibility: 'none' },
+					layout: { visibility: 'visible' },
 					paint: { 'raster-opacity': 0.7 }
 				},
 // 				{ No geology data available
@@ -382,7 +518,7 @@ function headerToBounds(header: any): TileHeaderBounds {
 					type: 'line',
 					source: 'contours',
 					'source-layer': 'contours',
-					layout: { visibility: 'none' },
+					layout: { visibility: 'visible' },
 					paint: {
 						'line-color': '#1f2937',
 						'line-width': 1,
@@ -414,27 +550,64 @@ function headerToBounds(header: any): TileHeaderBounds {
 		};
 	}
 
-	function updateLayers(layersState: any) {
-		if (!map || !map.isStyleLoaded()) return;
+	// Safe layer applier with retries
+	function applyLayerState(layersState: any, retryCount = 0) {
+		console.log('[applyLayerState] Called with state:', layersState);
+
+		if (!map) {
+			console.warn('[applyLayerState] Map instance not available');
+			return;
+		}
+
+		const pendingLayers: string[] = [];
 
 		Object.entries(layersState).forEach(([layerId, config]: [string, any]) => {
-			if (map.getLayer(layerId)) {
-				map.setLayoutProperty(
-					layerId,
-					'visibility',
-					config.visible ? 'visible' : 'none'
-				);
+			const layer = map.getLayer(layerId);
+			if (layer) {
+				const newVisibility = config.visible ? 'visible' : 'none';
+				console.log(`[applyLayerState] Setting ${layerId} visibility to ${newVisibility}`);
 
-				// Update opacity for raster layers
-				if (map.getLayer(layerId)?.type === 'raster') {
-					map.setPaintProperty(layerId, 'raster-opacity', config.opacity);
+				try {
+					map.setLayoutProperty(layerId, 'visibility', newVisibility);
+
+					// Update opacity for raster layers
+					if (layer.type === 'raster') {
+						console.log(`[applyLayerState] Setting ${layerId} opacity to ${config.opacity}`);
+						map.setPaintProperty(layerId, 'raster-opacity', config.opacity);
+					}
+				} catch (error) {
+					console.error(`[applyLayerState] Error updating layer ${layerId}:`, error);
 				}
+			} else {
+				// Layer not yet available, track for retry
+				console.log(`[applyLayerState] Layer ${layerId} not found, will retry`);
+				pendingLayers.push(layerId);
 			}
 		});
+
+		// Retry for layers that don't exist yet (up to 30 attempts = 3 seconds)
+		if (pendingLayers.length > 0 && retryCount < 30) {
+			console.log(`[applyLayerState] Retrying ${pendingLayers.length} layers in 100ms (attempt ${retryCount + 1}/30)`);
+			setTimeout(() => {
+				// Only retry the pending layers
+				const pendingState: any = {};
+				pendingLayers.forEach(id => {
+					pendingState[id] = layersState[id];
+				});
+				applyLayerState(pendingState, retryCount + 1);
+			}, 100);
+		} else if (pendingLayers.length > 0) {
+			console.warn(`[applyLayerState] Gave up on layers after 30 attempts:`, pendingLayers);
+		}
+	}
+
+	// Legacy function for compatibility - redirects to applyLayerState
+	function updateLayers(layersState: any) {
+		applyLayerState(layersState);
 	}
 
 function updateWatershedsLayer(watershedsData: any[]) {
-	if (!map || !map.isStyleLoaded()) return;
+	if (!mapReady || !map) return;
 
 	const source = map.getSource('watersheds') as maplibregl.GeoJSONSource;
 	if (!source) return;
@@ -446,7 +619,7 @@ function updateWatershedsLayer(watershedsData: any[]) {
 }
 
 function updateOutletLayer(outlets: any[]) {
-	if (!map || !map.isStyleLoaded()) return;
+	if (!mapReady || !map) return;
 
 	const source = map.getSource('watershed-outlets') as maplibregl.GeoJSONSource;
 	if (!source) return;
@@ -457,14 +630,17 @@ function updateOutletLayer(outlets: any[]) {
 	});
 }
 
-function updateBasemap(style: 'osm' | 'light') {
-	if (!map || !map.isStyleLoaded()) return;
+function updateBasemap(style: 'osm' | 'light' | 'none') {
+	if (!mapReady || !map) return;
 
 	if (map.getLayer('base-osm')) {
 		map.setLayoutProperty('base-osm', 'visibility', style === 'osm' ? 'visible' : 'none');
 	}
 	if (map.getLayer('base-light')) {
 		map.setLayoutProperty('base-light', 'visibility', style === 'light' ? 'visible' : 'none');
+	}
+	if (map.getLayer('base-none')) {
+		map.setLayoutProperty('base-none', 'visibility', style === 'none' ? 'visible' : 'none');
 	}
 }
 
@@ -495,6 +671,28 @@ async function initializeTileStatus() {
 			const header = await pmtiles.getHeader();
 			tileMetadata.set(src.id, { url: absoluteUrl, header: headerToBounds(header) });
 			pmtilesProtocol?.add(pmtiles);
+
+			// Verify vector layer metadata for vector tiles
+			if (src.id === 'streams' || src.id === 'contours') {
+				try {
+					const metadata = await pmtiles.getMetadata();
+					if (metadata && metadata.vector_layers) {
+						const layerNames = metadata.vector_layers.map((layer: any) => layer.id);
+						const expectedLayer = src.id; // Expected source-layer name
+
+						if (!layerNames.includes(expectedLayer)) {
+							console.warn(`[PMTiles] Vector layer mismatch for ${src.id}.pmtiles:
+								Expected source-layer: "${expectedLayer}"
+								Available layers: ${layerNames.join(', ')}
+								Update your style's source-layer references to match.`);
+						} else {
+							console.log(`[PMTiles] Vector layer verified for ${src.id}: "${expectedLayer}" found`);
+						}
+					}
+				} catch (metaError) {
+					console.log(`[PMTiles] Could not verify vector layers for ${src.id}:`, metaError);
+				}
+			}
 		} catch (error) {
 			tileMetadata.set(src.id, {
 				url: absoluteUrl,
@@ -555,7 +753,7 @@ function updateTileStatusForCenter() {
 }
 
 function updateCrossSectionLayer(points: [number, number][]) {
-	if (!map || !map.isStyleLoaded()) return;
+	if (!mapReady || !map) return;
 
 		const source = map.getSource('cross-section-line') as maplibregl.GeoJSONSource;
 		if (!source) return;

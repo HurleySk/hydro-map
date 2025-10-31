@@ -157,6 +157,7 @@ def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, 
 
         subprocess.run([
             'gdal2tiles.py',
+            '--xyz',  # Use XYZ tile numbering (OSM Slippy Map) instead of TMS
             '--zoom', f'{min_zoom}-{max_zoom}',
             '--processes', '4',
             '--webviewer', 'none',
