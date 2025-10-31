@@ -44,16 +44,22 @@ from tqdm import tqdm
 @click.option(
     '--max-zoom',
     type=int,
-    default=14,
+    default=17,
     help='Maximum zoom level'
 )
 @click.option(
     '--contour-interval',
     type=int,
-    default=10,
-    help='Contour interval in meters (default: 10)'
+    default=1,
+    help='Contour interval in meters (default: 1)'
 )
-def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval):
+@click.option(
+    '--raster-resampling',
+    type=click.Choice(['nearest', 'bilinear', 'cubic', 'lanczos'], case_sensitive=False),
+    default='lanczos',
+    help='Resampling kernel for raster tiles (default: lanczos)'
+)
+def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval, raster_resampling):
     """Generate PMTiles from processed data."""
 
     data_path = Path(data_dir)
@@ -64,6 +70,7 @@ def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval):
     click.echo(f"Data directory: {data_path}")
     click.echo(f"Output directory: {output_path}")
     click.echo(f"Zoom levels: {min_zoom}-{max_zoom}")
+    click.echo(f"Raster resampling: {raster_resampling}")
 
     # Raster tiles (hillshade, slope, aspect)
     raster_files = {
@@ -79,7 +86,8 @@ def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval):
                 raster_file,
                 output_path / f"{name}.pmtiles",
                 min_zoom,
-                max_zoom
+                max_zoom,
+                raster_resampling
             )
         else:
             click.echo(f"Warning: {name} not found at {raster_file}")
@@ -129,7 +137,7 @@ def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval):
     click.echo("\nTile generation complete!")
 
 
-def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, max_zoom: int):
+def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, max_zoom: int, raster_resampling: str):
     """Generate PMTiles from raster data."""
 
     temp_dir = output_file.parent / 'temp_tiles'
@@ -161,7 +169,7 @@ def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, 
             '--zoom', f'{min_zoom}-{max_zoom}',
             '--processes', '4',
             '--webviewer', 'none',
-            '-r', 'bilinear',
+            '-r', raster_resampling,
             str(temp_tif),
             str(xyz_dir)
         ], check=True, capture_output=True)
@@ -250,8 +258,8 @@ def generate_vector_pmtiles(
             '-l', layer_name,
             '-z', str(max_zoom),
             '-Z', str(min_zoom),
-            '--drop-densest-as-needed',
-            '--extend-zooms-if-still-dropping',
+            '--no-tile-size-limit',
+            '--no-feature-reduction',
             str(input_for_tippecanoe)
         ], check=True, capture_output=True)
 

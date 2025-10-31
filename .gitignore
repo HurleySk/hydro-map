@@ -67,3 +67,4 @@ coverage/
 tmp/
 temp/
 *.tmp
+tmp_*

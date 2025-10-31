@@ -6,12 +6,13 @@ An interactive web application for exploring hydrological and geological feature
 
 ### Core Capabilities
 
-- **On-Demand Watershed Delineation**: Click any point on the map to instantly compute the upstream catchment area with detailed statistics
-- **Stream Network Visualization**: Interactive stream lines with Strahler order, flow direction, and attributes
-- **Terrain Analysis**: Hillshade, slope, aspect, and contour visualization
-- **Geological Mapping**: Bedrock and surficial geology with formation information
-- **Cross-Section Tool**: Draw lines to generate elevation and geology profiles
-- **Feature Queries**: Click to inspect attributes of streams, geology, and other features
+- **On-Demand Watershed Delineation**: Click any point on the map to instantly compute the upstream catchment area with detailed statistics.
+- **Stream Network Visualization**: Interactive stream lines with Strahler order, flow direction, and length attributes.
+- **Terrain Analysis**: Toggle hillshade, slope, aspect, and contour visualizations derived from the DEM.
+- **Geological Mapping**: Overlay bedrock/surficial geology (when provided) with formation metadata.
+- **Cross-Section Tool**: Draw a line to generate elevation and geology profiles, complete with a sparkline preview.
+- **Feature Queries**: Inspect streams and geology at a clicked location using the Feature Info panel.
+- **Tile Health Monitoring**: A built-in tile status panel reports coverage and reachability for every PMTiles source.
 
 ### Technical Highlights
 
@@ -113,9 +114,13 @@ Before running the application, you need to prepare your data:
    python scripts/generate_tiles.py \
      --data-dir data/processed \
      --output-dir data/tiles \
-     --min-zoom 10 \
-     --max-zoom 16
+     --min-zoom 8 \
+     --max-zoom 17 \
+     --contour-interval 2
    ```
+   - By default the script emits 1 m contour isolines; the example above passes `--contour-interval 2`, which pairs well with the 200 m/100 m target scale. Adjust `--max-zoom` or `--contour-interval` to suit your DEM resolution and styling goals.
+   - By default the script emits 1 m contour isolines; the example above passes `--contour-interval 2`, which pairs well with the 200 m/100 m target scale. Adjust `--max-zoom` or `--contour-interval` to suit your DEM resolution and styling goals.
+   - Use the new `--raster-resampling` flag (default: `lanczos`) to fine-tune raster sharpness—switch to `nearest` for categorical rasters such as aspect or landcover.
 
 4. **(Optional) Add geology data**
    - Download geology layers from [USGS](https://mrdata.usgs.gov/geology/state/)
@@ -130,7 +135,7 @@ Before running the application, you need to prepare your data:
 
 ### Running the Application
 
-#### Option 1: Development Mode (Recommended for Development)
+#### Option 1: Development Mode (Recommended)
 
 **Terminal 1 - Backend:**
 ```bash
@@ -164,10 +169,9 @@ Access at http://localhost:5173
 2. Optionally enable **"Snap to nearest stream"** to snap pour points to high flow accumulation
 3. Click anywhere on the map
 4. The upstream watershed polygon appears with statistics:
-   - Area (km², mi²)
-   - Perimeter
-   - Elevation statistics
-   - Stream metrics
+  - Area (km², mi²)
+  - Perimeter
+  - Elevation statistics (min/max/mean/std)
 
 Results are cached by snapped location for fast repeated queries.
 
@@ -184,9 +188,9 @@ Results are cached by snapped location for fast repeated queries.
 ### Layer Controls
 
 Use the **Layers** panel to:
-- Toggle visibility of terrain, streams, geology
-- Adjust opacity for each layer
-- Combine multiple layers for analysis
+- Toggle visibility of terrain, streams, contours, and more.
+- Adjust opacity per layer to blend terrain with vector overlays.
+- Combine multiple layers for richer analysis sessions.
 
 ### Feature Information
 
@@ -198,6 +202,7 @@ Click **Feature Info** mode and click the map to see attributes of:
 
 - Switch between the default color basemap and a light-gray background via the **Basemap** panel for better overlay contrast.
 - The layer checklist reflects live MapLibre state—if toggling a layer has no visual effect, confirm the PMTiles exist for the current extent (see troubleshooting below).
+- The **Tile Status** panel automatically checks reachability and coverage for each PMTiles source whenever you pan or zoom.
 
 ### Layer Visibility Checklist
 
@@ -276,27 +281,31 @@ Edit `.env` to customize:
 
 ```
 frontend/src/
-├── routes/+page.svelte      # Main application page
+├── routes/+page.svelte          # Main application shell
 ├── lib/
 │   ├── components/
-│   │   ├── Map.svelte       # MapLibre map with PMTiles
-│   │   ├── LayerPanel.svelte
-│   │   ├── WatershedTool.svelte
+│   │   ├── Map.svelte           # MapLibre integration & PMTiles protocol
+│   │   ├── LayerPanel.svelte    # Layer toggles & opacity sliders
+│   │   ├── WatershedTool.svelte # Delineation controls & summary
 │   │   ├── CrossSectionTool.svelte
-│   │   └── FeatureInfo.svelte
-│   └── stores.ts            # Svelte stores (layers, tools, etc.)
+│   │   ├── FeatureInfoTool.svelte
+│   │   ├── FeatureInfo.svelte
+│   │   ├── TileStatusPanel.svelte
+│   │   └── BaseMapToggle.svelte
+│   ├── stores.ts                # Central Svelte stores (layers, tools, state)
+│   └── utils/                   # Local storage helpers & geocoding client
 
 backend/app/
-├── main.py                  # FastAPI application
-├── config.py                # Settings from environment
+├── main.py                      # FastAPI ASGI application
+├── config.py                    # Environment-backed settings via Pydantic
 ├── routes/
-│   ├── delineate.py        # Watershed delineation
-│   ├── cross_section.py    # Profile generation
-│   └── features.py         # Feature queries
+│   ├── delineate.py             # Watershed delineation API
+│   ├── cross_section.py         # Elevation & geology profile API
+│   ├── features.py              # Stream/geology feature info API
+│   └── tiles.py                 # PMTiles range request handler
 └── services/
-    ├── watershed.py        # Delineation logic with WhiteboxTools
-    ├── cache.py            # Result caching
-    └── profile.py          # Cross-section generation
+    ├── watershed.py             # Hydrology utilities (snapping, tracing, stats)
+    └── cache.py                 # File/Redis cache abstraction for delineations
 ```
 
 ### Adding New Layers

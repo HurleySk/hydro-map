@@ -69,19 +69,25 @@ Hydro-Map is a full-stack web application with three main components:
 ### Component Hierarchy
 
 ```
-+page.svelte (Main App)
-├── Map.svelte (MapLibre wrapper)
-│   ├── PMTiles sources (hillshade, slope, streams, etc.)
-│   └── GeoJSON sources (watersheds, cross-sections)
-├── LayerPanel.svelte (Layer controls)
-├── WatershedTool.svelte (Delineation UI)
-├── CrossSectionTool.svelte (Profile UI)
-└── FeatureInfo.svelte (Popup/sidebar)
++page.svelte (Main App container)
+├── Map.svelte
+│   ├── Registers PMTiles protocol & initializes MapLibre
+│   ├── Manages GeoJSON overlays (watersheds, cross-section, outlets)
+│   ├── Handles delineation/cross-section requests and map interactions
+│   └── Computes tile availability state for the TileStatus store
+├── LayerPanel.svelte          (Layer toggles & opacity controls)
+├── WatershedTool.svelte       (Delineation mode + latest results summary)
+├── CrossSectionTool.svelte    (Digitizing workflow + preview chart)
+├── FeatureInfoTool.svelte     (Feature inspection mode toggle)
+├── TileStatusPanel.svelte     (Tile reachability & coverage report)
+├── BaseMapToggle.svelte       (Basemap style selector)
+├── LocationSearch.svelte      (Nominatim search + history)
+└── FeatureInfo.svelte         (Attribute popup/sidebar)
 ```
 
 ### State Management
 
-Using Svelte stores (`$lib/stores.ts`):
+Global UI state lives in `$lib/stores.ts` and is composed of writable stores:
 
 ```typescript
 // Layer visibility and opacity
@@ -95,6 +101,27 @@ watersheds: Watershed[]
 
 // Current cross-section data
 crossSection: CrossSection | null
+
+// Digitized cross-section vertices
+crossSectionLine: [number, number][]
+
+// Persisted delineation settings (snap to stream, radius)
+delineationSettings: DelineationSettings
+
+// Watershed outlet features (snapped pour points)
+watershedOutlets: Feature[]
+
+// Latest delineation response (front-end summary)
+latestDelineation: DelineationResponse | null
+
+// Map view persistence (center, zoom, bearing, pitch)
+mapView: MapViewState
+
+// Tile availability summary for the Tile Status panel
+tileStatus: TileStatusItem[]
+
+// Location search history (localStorage backed)
+searchHistory: SearchHistoryItem[]
 ```
 
 ### Client-Side Tile Rendering
@@ -103,6 +130,7 @@ crossSection: CrossSection | null
 - Single-file tile archives served statically (no tile server needed)
 - HTTP range requests for efficient tile loading
 - Works with CDN/object storage
+- Tile metadata (bounds/head) is cached client-side to drive availability checks
 
 **MapLibre Style**:
 ```javascript
@@ -114,6 +142,10 @@ sources: {
   streams: {
     type: 'vector',
     url: 'pmtiles:///tiles/streams.pmtiles'
+  },
+  contours: {
+    type: 'vector',
+    url: 'pmtiles:///tiles/contours.pmtiles'
   }
 }
 ```
@@ -127,7 +159,7 @@ sources: {
 - **Server**: Uvicorn (ASGI)
 - **Caching**: File-based or Redis
 
-### API Routes
+### API Routes & Responsibilities
 
 #### `/api/delineate` (POST)
 Delineate watershed from pour point.
@@ -185,6 +217,12 @@ Generate elevation and geology profile.
 }
 ```
 
+#### `/api/feature-info` (POST)
+Return nearby streams and geology attributes for a clicked location.
+
+#### `/tiles/*` (GET/HEAD)
+Serve PMTiles archives with HTTP range support so MapLibre can request byte ranges directly.
+
 ### Service Layer
 
 #### `watershed.py`
@@ -197,40 +235,27 @@ Core delineation logic:
 
 2. **Trace watershed** using D8 flow direction
    - Read flow direction raster
-   - Breadth-first search upstream
-   - Build binary mask of contributing cells
+   - Breadth-first search upstream to build a contributing cell mask
 
 3. **Polygonize watershed**
-   - Convert mask to vector polygon
-   - Simplify geometry
-   - Calculate statistics
+   - Convert mask to vector polygon(s) via `rasterio.features.shapes`
+   - Merge polygons with `shapely.unary_union`
+   - Calculate area/perimeter and raster-derived elevation statistics
 
-4. **Cache result** by snapped location
-   - Hash coordinates to cache key
-   - Store GeoJSON + stats as JSON
+4. **Cache result** by snapped location (if enabled)
+   - Build cache key from snapped lat/lon + snapping settings
+   - Store full response JSON on disk or Redis
 
-**Algorithm**: D8 Flow Direction Tracing
-```python
-# D8 directions: 1=E, 2=SE, 4=S, 8=SW, 16=W, 32=NW, 64=N, 128=NE
-# For each cell, check all 8 neighbors
-# If neighbor flows TO current cell, add to watershed
-# Reverse lookup: 1 flows from 16 (W flows from E)
-```
+**Note**: Stream-based statistics are not yet computed; they can be added by intersecting the watershed polygon with `streams.gpkg`.
 
 #### `cache.py`
-Result caching:
+Provides a thin abstraction over file-based or Redis storage for delineation responses. The default file backend hashes the cache key and writes `<hash>.json` inside `data/cache/watersheds/`.
 
-```python
-# File-based cache (default)
-cache_dir/
-  watersheds/
-    <hash>.json
+#### `cross_section.py`
+Houses both API routing and helper functions for elevation sampling and geology contact detection. Sampling operates on the DEM and optional geology GeoPackage directly from disk—there is no dedicated service module yet.
 
-# Redis cache (optional)
-Key: watershed:<lat>,<lon>
-Value: JSON(result)
-TTL: 24 hours
-```
+#### `features.py`
+Loads stream and geology datasets on demand to answer point-in-polygon and buffered intersection queries. These operations are currently synchronous (GeoPandas/Shapely) and run inside the request handler.
 
 ## Data Pipeline
 
@@ -291,12 +316,12 @@ Terrain rasters + Stream vectors
 gdal_translate -scale -ot Byte -co COMPRESS=LZW input.tif output.tif
 
 # Generate XYZ tiles
-gdal2tiles.py --zoom 8-14 output.tif tiles/
+gdal2tiles.py --zoom 8-17 --resampling lanczos output.tif tiles/
 ```
 
 **Vector Tiles** (Tippecanoe):
 ```bash
-tippecanoe -o streams.mbtiles -l streams -z 14 -Z 8 streams.geojson
+tippecanoe -o streams.mbtiles -l streams -z 17 -Z 8 --no-feature-reduction --no-tile-size-limit streams.geojson
 ```
 
 **PMTiles Conversion**:
@@ -328,8 +353,7 @@ User clicks map
         │
         ├─> Calculate statistics
         │   ├─> Area (reproject to equal-area)
-        │   ├─> Elevation stats (sample DEM)
-        │   └─> Stream metrics (intersect streams)
+        │   └─> Elevation stats (sample DEM)
         │
         ├─> Cache result
         │
@@ -356,10 +380,10 @@ User draws line
         │   └─> Build profile [{distance, elevation, lat, lon}]
         │
         ├─> Find geology contacts
-        │   ├─> Read geology.gpkg
+        │   ├─> Read geology.gpkg (if present)
         │   ├─> Intersect line with polygons
-        │   ├─> Calculate start/end distances
-        │   └─> Extract formation attributes
+        │   ├─> Calculate start/end distances along the profile
+        │   └─> Extract formation attributes & derive colors
         │
         └─> Return profile + geology
             │
@@ -378,15 +402,16 @@ User draws line
 - **Lazy loading**: Tiles loaded on demand by zoom level
 - **Debouncing**: Limit API calls on rapid interactions
 - **Svelte reactivity**: Minimal re-renders
+- **Tile health checks**: PMTiles metadata cached and reused to avoid redundant HEAD requests
 
 ### Backend
-- **Caching**: Avoid re-computing identical watersheds
-- **Windowed reading**: Only read needed raster regions
-- **Async I/O**: Non-blocking file operations
-- **Connection pooling**: Reuse database connections
+- **Caching**: Avoid re-computing identical watersheds via file/Redis cache
+- **Windowed reading**: Raster reads are limited to small windows derived from pour-point or profile geometry
+- **Thread offloading**: Pour-point snapping runs via `asyncio.to_thread` to avoid blocking the event loop
+- **Config abstraction**: Pydantic settings centralize environment overrides
 
 ### Data
-- **Pyramids**: Multi-resolution tiles (zoom 8-14)
+- **Pyramids**: Multi-resolution tiles (zoom 8-17)
 - **Compression**: LZW for rasters, gzip for vectors
 - **Simplification**: Reduce geometry vertices for web
 - **Indexing**: Spatial indexes on vector layers

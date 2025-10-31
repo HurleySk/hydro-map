@@ -44,6 +44,8 @@ type TileHeaderBounds = {
 type TileMeta = {
 	url: string;
 	header?: TileHeaderBounds;
+	minZoom?: number;
+	maxZoom?: number;
 	error?: string;
 };
 
@@ -166,7 +168,7 @@ function headerToBounds(header: any): TileHeaderBounds {
 			zoom: initialZoom,
 			bearing: savedView?.bearing || 0,
 			pitch: savedView?.pitch || 0,
-			maxZoom: 16,
+			maxZoom: 17,
 			minZoom: 8
 		});
 
@@ -473,17 +475,19 @@ function headerToBounds(header: any): TileHeaderBounds {
 					source: 'streams',
 					'source-layer': 'streams',
 					layout: { visibility: 'visible' },
-					paint: {
-						'line-color': '#3b82f6',
-						'line-width': [
-							'interpolate',
-							['linear'],
-							['zoom'],
-							8, 1,
-							14, 3
-						]
-					}
-				},
+			paint: {
+				'line-color': '#3b82f6',
+				'line-width': [
+					'interpolate',
+					['linear'],
+					['zoom'],
+					8, 1,
+					14, 3,
+					16, 3.6,
+					17, 4.2
+				]
+			}
+		},
 				{
 					id: 'watersheds-fill',
 					type: 'fill',
@@ -519,12 +523,19 @@ function headerToBounds(header: any): TileHeaderBounds {
 					source: 'contours',
 					'source-layer': 'contours',
 					layout: { visibility: 'visible' },
-					paint: {
-						'line-color': '#1f2937',
-						'line-width': 1,
-						'line-opacity': 0.6
-					}
-				},
+			paint: {
+				'line-color': '#1f2937',
+				'line-width': [
+					'interpolate',
+					['linear'],
+					['zoom'],
+					8, 0.6,
+					14, 1.1,
+					17, 1.6
+				],
+				'line-opacity': 0.75
+			}
+		},
 				{
 					id: 'cross-section-line',
 					type: 'line',
@@ -669,7 +680,13 @@ async function initializeTileStatus() {
 		try {
 			const pmtiles = new PMTiles(absoluteUrl);
 			const header = await pmtiles.getHeader();
-			tileMetadata.set(src.id, { url: absoluteUrl, header: headerToBounds(header) });
+			const bounds = headerToBounds(header);
+			tileMetadata.set(src.id, {
+				url: absoluteUrl,
+				header: bounds,
+				minZoom: typeof header.minZoom === 'number' ? header.minZoom : undefined,
+				maxZoom: typeof header.maxZoom === 'number' ? header.maxZoom : undefined
+			});
 			pmtilesProtocol?.add(pmtiles);
 
 			// Verify vector layer metadata for vector tiles
@@ -711,6 +728,7 @@ function updateTileStatusForCenter() {
 	}
 
 	const center = map.getCenter();
+	const currentZoom = map.getZoom();
 	const statuses = tileSources.map((src) => {
 		const meta = tileMetadata.get(src.id);
 		if (!meta) {
@@ -739,13 +757,36 @@ function updateTileStatusForCenter() {
 			center.lat >= meta.header.minLat &&
 			center.lat <= meta.header.maxLat;
 
+		const nativeMaxZoom = meta.maxZoom;
+		const roundedMaxZoom = nativeMaxZoom !== undefined ? Math.round(nativeMaxZoom) : undefined;
+		const overzoom = nativeMaxZoom !== undefined && currentZoom > nativeMaxZoom + 0.05;
+		const zoomLabel = roundedMaxZoom !== undefined ? `native max z${roundedMaxZoom}` : 'native max unknown';
+
+		if (!within) {
+			return {
+				id: src.id,
+				label: src.label,
+				available: false,
+				message: `No coverage at ${center.lat.toFixed(3)}, ${center.lng.toFixed(3)} (${zoomLabel})`
+			};
+		}
+
+		if (overzoom) {
+			return {
+				id: src.id,
+				label: src.label,
+				available: false,
+				message: `Overzooming past ${zoomLabel}; current z${currentZoom.toFixed(1)}`
+			};
+		}
+
 		return {
 			id: src.id,
 			label: src.label,
-			available: within,
-			message: within
-				? 'Available in current view'
-				: `No coverage at ${center.lat.toFixed(3)}, ${center.lng.toFixed(3)}`
+			available: true,
+			message: roundedMaxZoom !== undefined
+				? `Available in current view (${zoomLabel})`
+				: 'Available in current view'
 		};
 	});
 

@@ -50,8 +50,11 @@ python scripts/prepare_streams.py \
 # 3. Generate web tiles (requires GDAL, Tippecanoe, PMTiles CLI)
 python scripts/generate_tiles.py \
   --data-dir data/processed \
-  --output-dir data/tiles
+  --output-dir data/tiles \
+  --max-zoom 17 \
+  --contour-interval 2
 ```
+> Defaults produce 1 m contour spacing; passing `--contour-interval 2` (as above) generally balances legibility at the 200 m–100 m map scale. Tweak `--max-zoom` or `--contour-interval` if your DEM resolution or styling goals call for different values, and use `--raster-resampling nearest` whenever you tile categorical rasters.
 
 ## Run the Application
 
@@ -83,6 +86,9 @@ Navigate to: http://localhost:5173
    - Click "Draw Cross-Section"
    - Click 2+ points to draw a line
    - Click "Generate Profile"
+5. **Check Tile Coverage**:
+   - Review the **Tile Status** panel; each PMTiles source reports whether it covers the current map center.
+   - If a layer reports "Unavailable", regenerate tiles for the current area of interest or adjust the map view.
 
 ## Common Issues
 
@@ -93,9 +99,9 @@ curl http://localhost:8000/api/delineate/status
 ```
 
 ### No tiles appearing
-- Ensure tiles were generated in `data/tiles/`
-- Check browser console for errors
-- Verify paths in frontend Map.svelte match your data
+- Ensure tiles were generated in `data/tiles/` (Tile Status panel should report "Available").
+- Check browser console for errors (look for `/tiles/*.pmtiles` 404/500 responses).
+- Verify paths in frontend Map.svelte match your data and that the backend has read access.
 
 ### Delineation fails
 - Ensure flow_direction.tif and flow_accumulation.tif exist
@@ -127,7 +133,7 @@ curl -X POST http://localhost:8000/api/delineate \
 
 # Run tests
 cd backend && pytest
-cd frontend && npm test
+cd frontend && npm run check
 
 # Build for production
 cd frontend && npm run build

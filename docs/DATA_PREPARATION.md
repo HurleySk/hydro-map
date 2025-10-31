@@ -128,13 +128,19 @@ python scripts/generate_tiles.py \
   --data-dir data/processed \
   --output-dir data/tiles \
   --min-zoom 8 \
-  --max-zoom 14
+  --max-zoom 17 \
+  --contour-interval 2
 ```
 
-**Zoom levels**:
+`--raster-resampling` lets you select the gdal2tiles kernel (`lanczos` is the new default for crisp hillshade; use `nearest` for categorical rasters like aspect). Vector tiles are exported with `tippecanoe --no-feature-reduction` to preserve geometry all the way to z17.
+
+**Zoom levels** (defaults: min 8, max 17):
 - `8-10`: Regional view (county scale)
 - `11-12`: Local view (watershed scale)
-- `13-14`: Detailed view (stream segments)
+- `13-15`: Detailed view (stream segments)
+- `16-17`: High-resolution terrain (≈1–2 m/px near 39° latitude)
+
+Increase `--max-zoom` only if your DEM resolution supports sub-meter detail; the app will overzoom gracefully, but native tiles give crisper visuals. `--contour-interval` defaults to `1` meter—raise it (e.g., `--contour-interval 2` or `--contour-interval 10`) for broader terrain steps or lower-detail products.
 
 **Outputs** (in `data/tiles/`):
 - `hillshade.pmtiles`
@@ -144,7 +150,7 @@ python scripts/generate_tiles.py \
 - `contours.pmtiles` (if contours were generated)
 
 **Note**: This script requires external tools:
-- **GDAL** (`gdal_translate`, `gdal2tiles.py`, `gdal_contour`)
+- **GDAL** (`gdal_translate`, `gdal2tiles.py` with `--xyz`, `gdal_contour`)
 - **Tippecanoe** (for vector tiles)
 - **mb-util** (Python package for MBTiles manipulation)
 - **PMTiles CLI** (for final conversion to PMTiles format)
@@ -357,7 +363,9 @@ python scripts/prepare_streams.py \
 # 4. Generate tiles
 python scripts/generate_tiles.py \
   --data-dir data/processed \
-  --output-dir data/tiles
+  --output-dir data/tiles \
+  --max-zoom 17 \
+  --contour-interval 2
 
 # 5. Start application
 cd backend && uvicorn app.main:app --reload &
