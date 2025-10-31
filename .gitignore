@@ -68,3 +68,12 @@ tmp/
 temp/
 *.tmp
 tmp_*
+# Large processed datasets (kept locally)
+data/processed/dem/*.tif
+data/processed/contours.gpkg
+data/tiles/*.geojson
+data/tiles/*.pmtiles
+data/tiles/*.mbtiles
+# Allow placeholder keep files
+!data/processed/.gitkeep
+!data/tiles/.gitkeep
