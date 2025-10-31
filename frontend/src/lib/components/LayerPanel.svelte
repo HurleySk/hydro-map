@@ -3,7 +3,7 @@
 
 	const layerGroups: Record<string, string[]> = {
 		'Terrain': ['hillshade', 'slope', 'aspect'],
-		'Hydrology': ['streams', 'contours']
+		'Hydrology': ['streams', 'contours', 'huc12-outline']
 		// 'Geology': ['geology']  // No geology data available
 	};
 
@@ -13,7 +13,8 @@
 		aspect: 'Aspect',
 		streams: 'Stream Network',
 		// geology: 'Geology',  // No geology data available
-		contours: 'Contours'
+		contours: 'Contours',
+		'huc12-outline': 'HUC12 Watersheds'
 	};
 
 	function toggleLayer(layerId: string) {

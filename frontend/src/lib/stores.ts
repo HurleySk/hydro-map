@@ -54,6 +54,9 @@ export const layers = writable<LayersState>({
 	streams: { visible: true, opacity: 1.0 },
 	// geology: { visible: false, opacity: 0.7 },  // No geology data available
 	contours: { visible: false, opacity: 0.8 },
+	'huc12-fill': { visible: false, opacity: 1.0 },
+	'huc12-outline': { visible: false, opacity: 1.0 },
+	'huc12-labels': { visible: false, opacity: 1.0 },
 });
 
 // Active tool

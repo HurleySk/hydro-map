@@ -55,7 +55,8 @@ const tileSources = [
 	{ id: 'aspect', label: 'Aspect', filename: 'aspect.pmtiles' },
 	{ id: 'streams', label: 'Streams', filename: 'streams.pmtiles' },
 	{ id: 'geology', label: 'Geology', filename: 'geology.pmtiles' },
-	{ id: 'contours', label: 'Contours', filename: 'contours.pmtiles' }
+	{ id: 'contours', label: 'Contours', filename: 'contours.pmtiles' },
+	{ id: 'huc12', label: 'HUC12 Watersheds', filename: 'huc12.pmtiles' }
 ];
 
 const tileMetadata = new Map<string, TileMeta>();
@@ -334,6 +335,7 @@ function headerToBounds(header: any): TileHeaderBounds {
 
 		return {
 			version: 8 as 8,
+			glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
 			sources: {
 				'base-map-osm': {
 					type: 'raster',
@@ -405,6 +407,10 @@ function headerToBounds(header: any): TileHeaderBounds {
 			contours: {
 				type: 'vector',
 				url: buildPmtilesUrl('contours.pmtiles')
+			},
+			huc12: {
+				type: 'vector',
+				url: buildPmtilesUrl('huc12.pmtiles')
 			}
 		},
 			layers: [
@@ -475,19 +481,131 @@ function headerToBounds(header: any): TileHeaderBounds {
 					source: 'streams',
 					'source-layer': 'streams',
 					layout: { visibility: 'visible' },
-			paint: {
-				'line-color': '#3b82f6',
-				'line-width': [
-					'interpolate',
-					['linear'],
-					['zoom'],
-					8, 1,
-					14, 3,
-					16, 3.6,
-					17, 4.2
-				]
-			}
-		},
+					paint: {
+						// Color by drainage area (darker blue = larger drainage area)
+						'line-color': [
+							'interpolate',
+							['linear'],
+							['coalesce', ['get', 'drainage_area_sqkm'], 0],
+							0, '#60a5fa',      // Very small streams: medium-light blue (darker than before)
+							1, '#3b82f6',      // Small streams: blue
+							5, '#2563eb',      // Medium streams: medium-dark blue
+							15, '#1d4ed8',     // Large streams: dark blue
+							50, '#1e40af'      // Very large streams: very dark blue
+						],
+						// Width by stream order and zoom level
+						'line-width': [
+							'interpolate',
+							['linear'],
+							['zoom'],
+							8, [
+								'match',
+								['coalesce', ['get', 'stream_order'], 1],
+								1, 0.5,
+								2, 0.8,
+								3, 1.2,
+								0.5 // fallback
+							],
+							14, [
+								'match',
+								['coalesce', ['get', 'stream_order'], 1],
+								1, 1.5,
+								2, 2.5,
+								3, 3.5,
+								1.5 // fallback
+							],
+							17, [
+								'match',
+								['coalesce', ['get', 'stream_order'], 1],
+								1, 2.5,
+								2, 4,
+								3, 5.5,
+								2.5 // fallback
+							]
+						],
+						'line-opacity': 0.9
+					}
+				},
+				{
+					id: 'huc12-fill',
+					type: 'fill',
+					source: 'huc12',
+					'source-layer': 'huc12',
+					layout: { visibility: 'none' },
+					paint: {
+						'fill-color': [
+							'match',
+							['get', 'name'],
+							'Accotink Creek', '#fbbf24',           // Amber/Yellow
+							'Fourmile Run-Potomac River', '#a78bfa', // Purple
+							'Cameron Run', '#60a5fa',               // Blue
+							'Pohick Creek', '#34d399',              // Green
+							'#fbbf24' // fallback
+						],
+						'fill-opacity': 0.2
+					}
+				},
+				{
+					id: 'huc12-outline',
+					type: 'line',
+					source: 'huc12',
+					'source-layer': 'huc12',
+					layout: { visibility: 'none' },
+					paint: {
+						'line-color': [
+							'match',
+							['get', 'name'],
+							'Accotink Creek', '#f59e0b',           // Darker Amber/Orange
+							'Fourmile Run-Potomac River', '#8b5cf6', // Darker Purple
+							'Cameron Run', '#3b82f6',               // Darker Blue
+							'Pohick Creek', '#10b981',              // Darker Green
+							'#f59e0b' // fallback
+						],
+						'line-width': [
+							'interpolate',
+							['linear'],
+							['zoom'],
+							8, 1.5,
+							14, 2.5,
+							17, 3.5
+						],
+						'line-opacity': 0.8
+					}
+				},
+				{
+					id: 'huc12-labels',
+					type: 'symbol',
+					source: 'huc12',
+					'source-layer': 'huc12',
+					minzoom: 11,
+					layout: {
+						visibility: 'none',
+						'text-field': ['get', 'name'],
+						'text-font': ['Noto Sans Regular'],
+						'text-size': [
+							'interpolate',
+							['linear'],
+							['zoom'],
+							11, 13,
+							14, 16,
+							17, 20
+						],
+						'text-allow-overlap': true
+					},
+					paint: {
+						'text-color': [
+							'match',
+							['get', 'name'],
+							'Accotink Creek', '#b45309',
+							'Fourmile Run-Potomac River', '#6d28d9',
+							'Cameron Run', '#1e40af',
+							'Pohick Creek', '#047857',
+							'#1f2937'
+						],
+						'text-halo-color': '#ffffff',
+						'text-halo-width': 2.5
+					}
+				},
 				{
 					id: 'watersheds-fill',
 					type: 'fill',
@@ -573,6 +691,11 @@ function headerToBounds(header: any): TileHeaderBounds {
 		const pendingLayers: string[] = [];
 
 		Object.entries(layersState).forEach(([layerId, config]: [string, any]) => {
+			// Skip huc12-fill and huc12-labels - they're controlled by huc12-outline
+			if (layerId === 'huc12-fill' || layerId === 'huc12-labels') {
+				return;
+			}
+
 			const layer = map.getLayer(layerId);
 			if (layer) {
 				const newVisibility = config.visible ? 'visible' : 'none';
@@ -580,6 +703,21 @@ function headerToBounds(header: any): TileHeaderBounds {
 
 				try {
 					map.setLayoutProperty(layerId, 'visibility', newVisibility);
+
+					// Special handling: sync HUC12 fill and labels with outline visibility
+					if (layerId === 'huc12-outline') {
+						const huc12Fill = map.getLayer('huc12-fill');
+						const huc12Labels = map.getLayer('huc12-labels');
+
+						if (huc12Fill) {
+							console.log(`[applyLayerState] Syncing huc12-fill visibility to ${newVisibility}`);
+							map.setLayoutProperty('huc12-fill', 'visibility', newVisibility);
+						}
+						if (huc12Labels) {
+							console.log(`[applyLayerState] Syncing huc12-labels visibility to ${newVisibility}`);
+							map.setLayoutProperty('huc12-labels', 'visibility', newVisibility);
+						}
+					}
 
 					// Update opacity for raster layers
 					if (layer.type === 'raster') {
@@ -690,7 +828,7 @@ async function initializeTileStatus() {
 			pmtilesProtocol?.add(pmtiles);
 
 			// Verify vector layer metadata for vector tiles
-			if (src.id === 'streams' || src.id === 'contours') {
+			if (src.id === 'streams' || src.id === 'contours' || src.id === 'huc12') {
 				try {
 					const metadata: any = await pmtiles.getMetadata();
 					if (metadata && metadata.vector_layers) {

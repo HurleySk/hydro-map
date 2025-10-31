@@ -70,10 +70,38 @@
 				<h4>Streams</h4>
 				{#each features.streams as stream}
 					<div class="feature-item">
-						<div class="feature-name">{stream.name}</div>
-						<div class="feature-attr">Order: {stream.order}</div>
+						{#if stream.name}
+							<div class="feature-name">{stream.name}</div>
+						{:else}
+							<div class="feature-name">Unnamed Stream</div>
+						{/if}
+
+						{#if stream.stream_order}
+							<div class="feature-attr">Stream Order: {stream.stream_order}</div>
+						{/if}
+
+						{#if stream.drainage_area_sqkm}
+							<div class="feature-attr">Drainage Area: {stream.drainage_area_sqkm.toFixed(2)} km²</div>
+						{/if}
+
 						{#if stream.length_km > 0}
-							<div class="feature-attr">Length: {stream.length_km.toFixed(2)} km</div>
+							<div class="feature-attr">Segment Length: {stream.length_km.toFixed(2)} km</div>
+						{/if}
+
+						{#if stream.upstream_length_km}
+							<div class="feature-attr">Upstream Length: {stream.upstream_length_km.toFixed(2)} km</div>
+						{/if}
+
+						{#if stream.slope !== undefined && stream.slope !== null}
+							<div class="feature-attr">Slope: {(stream.slope * 100).toFixed(3)}%</div>
+						{/if}
+
+						{#if stream.max_elev_m && stream.min_elev_m}
+							<div class="feature-attr">Elevation Range: {stream.min_elev_m.toFixed(1)}m - {stream.max_elev_m.toFixed(1)}m</div>
+						{/if}
+
+						{#if stream.stream_type}
+							<div class="feature-attr">Type: {stream.stream_type}</div>
 						{/if}
 					</div>
 				{/each}

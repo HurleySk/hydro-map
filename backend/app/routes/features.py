@@ -96,12 +96,20 @@ async def query_streams(point: Point, buffer_m: float) -> Optional[List[Dict]]:
         # Extract attributes
         features = []
         for idx, row in intersecting.iterrows():
-            length_km = float(row.get('length_km', row.get('LengthKM', 0)))
             feature = {
                 "type": "stream",
-                "name": row.get('GNIS_NAME', row.get('name', 'Unnamed')),
-                "order": int(row.get('StreamOrde', row.get('order', 0))),
-                "length_km": length_km,
+                "name": row.get('name', row.get('GNIS_NAME', 'Unnamed')),
+                "length_km": float(row.get('length_km', row.get('LengthKM', 0))),
+                # NHD Plus VAA attributes
+                "drainage_area_sqkm": float(row['drainage_area_sqkm']) if 'drainage_area_sqkm' in row and row['drainage_area_sqkm'] is not None else None,
+                "stream_order": int(row['stream_order']) if 'stream_order' in row and row['stream_order'] is not None else None,
+                "upstream_length_km": float(row['upstream_length_km']) if 'upstream_length_km' in row and row['upstream_length_km'] is not None else None,
+                "slope": float(row['slope']) if 'slope' in row and row['slope'] is not None else None,
+                "max_elev_m": float(row['max_elev_m']) if 'max_elev_m' in row and row['max_elev_m'] is not None else None,
+                "min_elev_m": float(row['min_elev_m']) if 'min_elev_m' in row and row['min_elev_m'] is not None else None,
+                "stream_type": str(row['stream_type']) if 'stream_type' in row and row['stream_type'] is not None else None,
+                # Keep legacy 'order' field for compatibility
+                "order": int(row.get('stream_order', row.get('StreamOrde', row.get('order', 0)))),
             }
             features.append(feature)
 

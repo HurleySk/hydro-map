@@ -86,6 +86,46 @@ def main(input, output, bounds):
         click.echo("Error: No natural streams found after filtering")
         return 1
 
+    # Join with NHDPlusFlowlineVAA table for enriched attributes
+    click.echo("\nJoining NHDPlusFlowlineVAA attributes...")
+    try:
+        import pandas as pd
+
+        # Read VAA table (it's a non-spatial table)
+        vaa_df = gpd.read_file(
+            input_path,
+            layer='NHDPlusFlowlineVAA'
+        )
+
+        # Join on NHDPlusID
+        if 'NHDPlusID' in streams_gdf.columns and 'NHDPlusID' in vaa_df.columns:
+            vaa_cols = ['NHDPlusID', 'TotDASqKm', 'StreamOrde', 'ArbolateSu',
+                       'Slope', 'MaxElevSmo', 'MinElevSmo']
+            vaa_subset = vaa_df[[c for c in vaa_cols if c in vaa_df.columns]]
+
+            streams_gdf = streams_gdf.merge(vaa_subset, on='NHDPlusID', how='left')
+
+            # Convert and rename VAA attributes
+            if 'TotDASqKm' in streams_gdf.columns:
+                streams_gdf['drainage_area_sqkm'] = streams_gdf['TotDASqKm']
+            if 'StreamOrde' in streams_gdf.columns:
+                streams_gdf['stream_order'] = streams_gdf['StreamOrde']
+            if 'ArbolateSu' in streams_gdf.columns:
+                streams_gdf['upstream_length_km'] = streams_gdf['ArbolateSu']
+            if 'Slope' in streams_gdf.columns:
+                streams_gdf['slope'] = streams_gdf['Slope']
+            # Convert elevations from centimeters to meters
+            if 'MaxElevSmo' in streams_gdf.columns:
+                streams_gdf['max_elev_m'] = streams_gdf['MaxElevSmo'] / 100.0
+            if 'MinElevSmo' in streams_gdf.columns:
+                streams_gdf['min_elev_m'] = streams_gdf['MinElevSmo'] / 100.0
+
+            click.echo(f"  Successfully joined VAA attributes for {len(streams_gdf)} streams")
+        else:
+            click.echo("  Warning: Could not join VAA table (missing NHDPlusID)")
+    except Exception as e:
+        click.echo(f"  Warning: Failed to join VAA table: {e}")
+
     # Add calculated attributes
     click.echo("\nCalculating stream attributes...")
 
@@ -121,6 +161,12 @@ def main(input, output, bounds):
 
     # Select and rename key fields for simplicity
     fields_to_keep = ['geometry', 'length_m', 'length_km', 'order', 'stream_type']
+
+    # Keep VAA attributes
+    vaa_fields = ['drainage_area_sqkm', 'stream_order', 'upstream_length_km', 'slope', 'max_elev_m', 'min_elev_m']
+    for field in vaa_fields:
+        if field in streams_gdf.columns:
+            fields_to_keep.append(field)
 
     # Keep GNIS_Name if it exists (official stream names)
     if 'GNIS_Name' in streams_gdf.columns:

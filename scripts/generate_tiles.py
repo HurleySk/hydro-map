@@ -114,11 +114,12 @@ def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval, raster_resa
     else:
         click.echo(f"\nWarning: Filled DEM not found at {filled_dem}, skipping contours")
 
-    # Vector tiles (streams, geology, contours)
+    # Vector tiles (streams, geology, contours, huc12)
     vector_files = {
         'streams': data_path / 'streams.gpkg',
         'geology': data_path / 'geology.gpkg',
         'contours': contours_gpkg,
+        'huc12': data_path / 'huc12.gpkg',
     }
 
     for name, vector_file in vector_files.items():
@@ -245,7 +246,8 @@ def generate_vector_pmtiles(
                 'ogr2ogr',
                 '-f', 'GeoJSON',
                 str(temp_geojson),
-                str(input_file)
+                str(input_file),
+                layer_name  # Specify which layer to export from GPKG
             ], check=True, capture_output=True)
             input_for_tippecanoe = temp_geojson
         else:
