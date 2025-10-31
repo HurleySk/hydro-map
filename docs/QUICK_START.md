@@ -87,7 +87,7 @@ Navigate to: http://localhost:5173
    - Click 2+ points to draw a line
    - Click "Generate Profile"
 5. **Check Tile Coverage**:
-   - Review the **Tile Status** panel; each PMTiles source reports whether it covers the current map center.
+   - Review the **Tile Status** panel; each PMTiles source reports whether it covers the current map center and flags when you overzoom past its native maximum.
    - If a layer reports "Unavailable", regenerate tiles for the current area of interest or adjust the map view.
 
 ## Common Issues

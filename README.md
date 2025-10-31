@@ -206,7 +206,7 @@ Click **Feature Info** mode and click the map to see attributes of:
 
 ### Layer Visibility Checklist
 
-Use the **Tile Status** panel in the left controls to confirm whether each PMTiles source covers the current map view. Additionally, the following manual checks can help:
+Use the **Tile Status** panel in the left controls to confirm whether each PMTiles source covers the current map view; it now reports each archive’s native max zoom and flags when you are overzooming beyond it. Additionally, the following manual checks can help:
 
 1. **Tiles reachable?**  
    Check DevTools → Network for `/tiles/*.pmtiles` requests. A `404` or `502` means the backend isn’t serving the files.

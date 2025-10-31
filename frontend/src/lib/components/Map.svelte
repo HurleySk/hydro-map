@@ -692,7 +692,7 @@ async function initializeTileStatus() {
 			// Verify vector layer metadata for vector tiles
 			if (src.id === 'streams' || src.id === 'contours') {
 				try {
-					const metadata = await pmtiles.getMetadata();
+					const metadata: any = await pmtiles.getMetadata();
 					if (metadata && metadata.vector_layers) {
 						const layerNames = metadata.vector_layers.map((layer: any) => layer.id);
 						const expectedLayer = src.id; // Expected source-layer name

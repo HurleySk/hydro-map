@@ -318,11 +318,13 @@ gdal_translate -scale -ot Byte -co COMPRESS=LZW input.tif output.tif
 # Generate XYZ tiles
 gdal2tiles.py --zoom 8-17 --resampling lanczos output.tif tiles/
 ```
+`lanczos` resampling keeps hillshade sharp at high zoom; switch to `nearest` for categorical rasters (e.g., aspect) when needed.
 
 **Vector Tiles** (Tippecanoe):
 ```bash
 tippecanoe -o streams.mbtiles -l streams -z 17 -Z 8 --no-feature-reduction --no-tile-size-limit streams.geojson
 ```
+`--no-feature-reduction` and `--no-tile-size-limit` keep every vector vertex through z17 so narrow hydro features remain crisp close-in.
 
 **PMTiles Conversion**:
 ```bash

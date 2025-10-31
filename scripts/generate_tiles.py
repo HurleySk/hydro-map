@@ -251,17 +251,34 @@ def generate_vector_pmtiles(
         else:
             input_for_tippecanoe = input_file
 
-        # Run Tippecanoe
-        subprocess.run([
+        # Run Tippecanoe with better detail preservation for streams
+        tippecanoe_cmd = [
             'tippecanoe',
             '-o', str(temp_mbtiles),
             '-l', layer_name,
             '-z', str(max_zoom),
             '-Z', str(min_zoom),
-            '--no-tile-size-limit',
-            '--no-feature-reduction',
-            str(input_for_tippecanoe)
-        ], check=True, capture_output=True)
+            '--no-tile-size-limit'
+        ]
+
+        # Add special parameters for stream layers to preserve detail
+        if layer_name == 'streams':
+            tippecanoe_cmd.extend([
+                '--no-feature-limit',     # Keep all features
+                '--simplification', '2',   # Minimal simplification (lower = more detail)
+                '--minimum-detail', '12',  # Preserve detail at lower zooms
+                '--no-line-simplification', # Disable line simplification
+                '--no-tiny-polygon-reduction' # Keep small features
+            ])
+        else:
+            # For other layers, use standard simplification
+            tippecanoe_cmd.extend([
+                '--no-feature-limit'
+            ])
+
+        tippecanoe_cmd.append(str(input_for_tippecanoe))
+
+        subprocess.run(tippecanoe_cmd, check=True, capture_output=True)
 
         # Convert to PMTiles (requires pmtiles CLI)
         click.echo(f"  Converting to PMTiles...")
