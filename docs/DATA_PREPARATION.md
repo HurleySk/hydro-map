@@ -64,37 +64,111 @@ python scripts/prepare_dem.py \
 
 **Processing time**: ~2-5 minutes for 100 sq mi at 10m resolution
 
-### 3. Extract Stream Network
+### 3. Extract Stream Network (Pure DEM Approach)
 
-Determine stream initiation threshold:
+The application uses a **pure DEM-derived stream network** that works globally without requiring external datasets like NHD. This approach extracts streams at multiple thresholds, filters artifacts, and computes hydrologic attributes.
 
-```python
-# Quick check: open flow_accumulation.tif in QGIS
-# Inspect values where you see streams
-# Typical thresholds:
-# - 1000 cells for 10m DEM (~1 km² drainage area)
-# - 500 cells for detailed streams
-# - 2000 cells for major streams only
-```
+#### Step 3a: Multi-Threshold Stream Extraction
 
-Run stream extraction:
+Extract streams at multiple flow accumulation thresholds (100, 250, 500, 1000 cells):
 
 ```bash
 python scripts/prepare_streams.py \
   --flow-acc data/processed/dem/flow_accumulation.tif \
   --flow-dir data/processed/dem/flow_direction.tif \
-  --output data/processed/streams.gpkg \
-  --threshold 1000
+  --output data/processed/streams_multi.gpkg \
+  --multi-threshold
+```
+
+**What this does**:
+- Extracts streams at 4 thresholds to capture different stream scales
+- Computes Strahler stream order for each threshold
+- Calculates drainage area from flow accumulation
+- Calculates stream segment length
+- Creates separate layers: `streams_t100`, `streams_t250`, `streams_t500`, `streams_t1000`
+
+**Typical thresholds** (for 10m DEM):
+- **100 cells**: Finest detail, captures small headwater streams (~0.01 km² drainage area)
+- **250 cells**: Good balance of detail vs. artifacts (~0.025 km² drainage area)
+- **500 cells**: Medium detail, fewer artifacts (~0.05 km² drainage area)
+- **1000 cells**: Major streams only (~0.1 km² drainage area)
+
+**Output**: `data/processed/streams_multi.gpkg` with 4 layers
+
+**Processing time**: ~3-10 minutes depending on DEM size
+
+#### Step 3b: Filter DEM Artifacts
+
+Remove spurious streams and compute confidence scores:
+
+```bash
+python scripts/filter_dem_streams.py \
+  --input data/processed/streams_multi.gpkg \
+  --layer streams_t250 \
+  --output data/processed/streams_filtered.gpkg \
+  --min-length 25 \
+  --min-drainage-area 0.01 \
+  --flow-acc data/processed/dem/flow_accumulation.tif
 ```
 
 **Parameters**:
-- `--threshold`: Flow accumulation threshold in cells
-  - Lower = more detailed network (more small streams)
-  - Higher = only major streams
+- `--layer`: Which threshold layer to filter (recommended: `streams_t250` or `streams_t500`)
+- `--min-length`: Minimum stream segment length in meters (removes tiny fragments)
+- `--min-drainage-area`: Minimum drainage area in km² (removes unlikely headwaters)
+- `--flow-acc`: Flow accumulation raster for drainage area calculation
 
-**Output**: `data/processed/streams.gpkg` - Stream network with attributes
+**What this does**:
+- **Length filtering**: Removes segments shorter than threshold
+- **Drainage area filtering**: Removes streams with implausibly small watersheds
+- **Geometric filtering**: Detects and removes very straight segments (likely DEM artifacts)
+- **Sinuosity calculation**: Measures stream meandering (real streams meander, artifacts are straight)
+- **Flow persistence classification**: Labels as Perennial/Intermittent/Ephemeral based on drainage area
+- **Confidence scoring**: Combines multiple metrics into a 0-1 confidence score
 
-**Processing time**: ~1-3 minutes
+**Confidence score formula**:
+- Normalized drainage area (0-1)
+- Normalized length (0-1)
+- Sinuosity bonus (meandering streams = more confident)
+- Stream order bonus (higher order = more confident)
+
+**Flow persistence thresholds**:
+- **Perennial** (year-round flow): Drainage area ≥ 5.0 km²
+- **Intermittent** (seasonal flow): Drainage area 0.5-5.0 km²
+- **Ephemeral** (storm-driven): Drainage area < 0.5 km²
+
+**Output**: `data/processed/streams_filtered.gpkg` with layer `streams_t<threshold>_filtered`
+
+**Processing time**: ~1-2 minutes
+
+#### Step 3c: Quality Assurance
+
+Generate a QA report to assess stream network quality:
+
+```bash
+python scripts/qa_stream_network.py \
+  --input data/processed/streams_filtered.gpkg \
+  --layer streams_t250_filtered \
+  --output reports/stream_qa_report.md
+```
+
+The report includes:
+- Stream count and length by order
+- Drainage area distribution
+- Confidence score distribution
+- Flow persistence classification
+- Sinuosity metrics
+- Recommendations for parameter tuning
+
+**Interpreting results**:
+- **High low-confidence rate (>20%)**: Consider increasing `--min-length` or `--min-drainage-area`, or using a coarser threshold
+- **Many very straight streams (>50%)**: DEM quality issues or need stricter geometric filtering
+- **All ephemeral streams**: Fine threshold capturing headwaters; use t500 or t1000 for perennial streams
+
+For production use, copy the filtered streams to the expected location:
+
+```bash
+cp data/processed/streams_filtered.gpkg data/processed/streams.gpkg
+```
 
 ### 4. Generate Contours (Optional)
 
@@ -353,12 +427,30 @@ python scripts/prepare_dem.py \
   --input data/raw/dem/elevation.tif \
   --output data/processed/dem/
 
-# 3. Extract streams
+# 3a. Extract streams at multiple thresholds
 python scripts/prepare_streams.py \
   --flow-acc data/processed/dem/flow_accumulation.tif \
   --flow-dir data/processed/dem/flow_direction.tif \
-  --output data/processed/streams.gpkg \
-  --threshold 1000
+  --output data/processed/streams_multi.gpkg \
+  --multi-threshold
+
+# 3b. Filter streams (remove artifacts)
+python scripts/filter_dem_streams.py \
+  --input data/processed/streams_multi.gpkg \
+  --layer streams_t250 \
+  --output data/processed/streams_filtered.gpkg \
+  --min-length 25 \
+  --min-drainage-area 0.01 \
+  --flow-acc data/processed/dem/flow_accumulation.tif
+
+# 3c. Copy filtered streams to expected location
+cp data/processed/streams_filtered.gpkg data/processed/streams.gpkg
+
+# 3d. Generate QA report (optional)
+python scripts/qa_stream_network.py \
+  --input data/processed/streams_filtered.gpkg \
+  --layer streams_t250_filtered \
+  --output reports/stream_qa_report.md
 
 # 4. Generate tiles
 python scripts/generate_tiles.py \
@@ -380,4 +472,4 @@ When using this application, please credit data sources:
 - **USGS 3DEP**: "Elevation data from USGS 3D Elevation Program"
 - **Copernicus**: "Copernicus DEM ©2021 European Space Agency"
 - **USGS Geology**: "Geologic data from USGS"
-- **NHD**: "Stream data from USGS National Hydrography Dataset"
+- **Stream Network**: "Stream network derived from DEM using WhiteboxTools"

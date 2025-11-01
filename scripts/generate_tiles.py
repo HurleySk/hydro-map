@@ -82,12 +82,18 @@ def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval, raster_resa
     for name, raster_file in raster_files.items():
         if raster_file.exists():
             click.echo(f"\nProcessing {name}...")
+            # Use nearest for categorical rasters like aspect to avoid color bleeding
+            effective_resampling = raster_resampling
+            if name == 'aspect' and raster_resampling.lower() == 'lanczos':
+                click.echo("  Aspect is categorical; overriding resampling to 'nearest' for cleaner tiles")
+                effective_resampling = 'nearest'
+
             generate_raster_pmtiles(
                 raster_file,
                 output_path / f"{name}.pmtiles",
                 min_zoom,
                 max_zoom,
-                raster_resampling
+                effective_resampling
             )
         else:
             click.echo(f"Warning: {name} not found at {raster_file}")
@@ -242,18 +248,26 @@ def generate_vector_pmtiles(
         # Convert to GeoJSON if needed
         source_layer = layer_name
         if input_file.suffix == '.gpkg':
-            # Prefer exploded/merged layers when available for additional detail
+            # For streams, try to find the best available layer
             if layer_name == 'streams':
-                candidate = 'streams_merged'
-                try:
-                    subprocess.run(
-                        ['ogrinfo', str(input_file), candidate],
-                        check=True,
-                        capture_output=True
-                    )
-                    source_layer = candidate
-                except subprocess.CalledProcessError:
-                    source_layer = layer_name
+                # Priority order for pure DEM workflow:
+                # 1. streams_t100_filtered (finest threshold, filtered)
+                # 2. streams_t250_filtered (medium threshold, filtered)
+                # 3. streams_merged (if from NHD fusion workflow)
+                # 4. streams (fallback)
+                candidates = ['streams_t100_filtered', 'streams_t250_filtered', 'streams_merged', 'streams']
+                for candidate in candidates:
+                    try:
+                        subprocess.run(
+                            ['ogrinfo', str(input_file), candidate],
+                            check=True,
+                            capture_output=True
+                        )
+                        source_layer = candidate
+                        click.echo(f"  Using layer: {source_layer}")
+                        break
+                    except subprocess.CalledProcessError:
+                        continue
 
             temp_geojson = output_file.parent / f"{input_file.stem}.geojson"
             subprocess.run([

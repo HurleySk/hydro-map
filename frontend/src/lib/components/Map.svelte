@@ -330,8 +330,8 @@ function headerToBounds(header: any): TileHeaderBounds {
 	}
 
 	function createMapStyle(): StyleSpecification {
-		// Note: Layer visibility is handled entirely by updateLayers()
-		// All layers start as 'visible' and updateLayers sets the correct state
+    // Note: Layer visibility is handled by applyLayerState() reacting to the store.
+    // Initialize layer visibilities to match store defaults to avoid flash of content.
 
 		return {
 			version: 8 as 8,
@@ -439,20 +439,20 @@ function headerToBounds(header: any): TileHeaderBounds {
 					layout: { visibility: 'visible' },
 					paint: { 'raster-opacity': 0.6 }
 				},
-				{
-					id: 'slope',
-					type: 'raster',
-					source: 'slope',
-					layout: { visibility: 'visible' },
-					paint: { 'raster-opacity': 0.7 }
-				},
-				{
-					id: 'aspect',
-					type: 'raster',
-					source: 'aspect',
-					layout: { visibility: 'visible' },
-					paint: { 'raster-opacity': 0.7 }
-				},
+                {
+                    id: 'slope',
+                    type: 'raster',
+                    source: 'slope',
+                    layout: { visibility: 'none' }, // default off per store
+                    paint: { 'raster-opacity': 0.7 }
+                },
+                {
+                    id: 'aspect',
+                    type: 'raster',
+                    source: 'aspect',
+                    layout: { visibility: 'none' }, // default off per store
+                    paint: { 'raster-opacity': 0.7 }
+                },
 // 				{ No geology data available
 					// id: 'geology',
 					// type: 'fill',
@@ -702,6 +702,13 @@ function headerToBounds(header: any): TileHeaderBounds {
 				console.log(`[applyLayerState] Setting ${layerId} visibility to ${newVisibility}`);
 
 				try {
+					// Update opacity for raster layers first to ensure immediate visual change
+					if (layer.type === 'raster') {
+						const targetOpacity = config.visible ? (config.opacity ?? 1.0) : 0;
+						console.log(`[applyLayerState] Setting ${layerId} opacity to ${targetOpacity}`);
+						map.setPaintProperty(layerId, 'raster-opacity', targetOpacity);
+					}
+
 					map.setLayoutProperty(layerId, 'visibility', newVisibility);
 
 					// Special handling: sync HUC12 fill and labels with outline visibility
@@ -719,11 +726,7 @@ function headerToBounds(header: any): TileHeaderBounds {
 						}
 					}
 
-					// Update opacity for raster layers
-					if (layer.type === 'raster') {
-						console.log(`[applyLayerState] Setting ${layerId} opacity to ${config.opacity}`);
-						map.setPaintProperty(layerId, 'raster-opacity', config.opacity);
-					}
+
 				} catch (error) {
 					console.error(`[applyLayerState] Error updating layer ${layerId}:`, error);
 				}
