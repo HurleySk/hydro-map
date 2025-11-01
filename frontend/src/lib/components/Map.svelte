@@ -432,13 +432,6 @@ function headerToBounds(header: any): TileHeaderBounds {
 					layout: { visibility: 'none' },
 					paint: { 'background-color': '#f8f8f8' }
 				},
-				{
-					id: 'hillshade',
-					type: 'raster',
-					source: 'hillshade',
-					layout: { visibility: 'visible' },
-					paint: { 'raster-opacity': 0.6 }
-				},
                 {
                     id: 'slope',
                     type: 'raster',
@@ -453,6 +446,13 @@ function headerToBounds(header: any): TileHeaderBounds {
                     layout: { visibility: 'none' }, // default off per store
                     paint: { 'raster-opacity': 0.7 }
                 },
+				{
+					id: 'hillshade',
+					type: 'raster',
+					source: 'hillshade',
+					layout: { visibility: 'none' }, // default off per store - renders on top of slope/aspect
+					paint: { 'raster-opacity': 0.6 }
+				},
 // 				{ No geology data available
 					// id: 'geology',
 					// type: 'fill',

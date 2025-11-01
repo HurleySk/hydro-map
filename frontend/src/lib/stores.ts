@@ -48,7 +48,7 @@ function createPersistedStore<T>(key: string, defaultValue: T) {
 
 // Layer visibility and opacity
 export const layers = writable<LayersState>({
-	hillshade: { visible: true, opacity: 0.6 },
+	hillshade: { visible: false, opacity: 0.6 },
 	slope: { visible: false, opacity: 0.7 },
 	aspect: { visible: false, opacity: 0.7 },
 	streams: { visible: true, opacity: 1.0 },

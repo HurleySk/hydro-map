@@ -155,20 +155,56 @@ def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, 
         temp_tif = temp_dir / f"{input_file.stem}_web.tif"
         click.echo(f"  Converting to web format...")
 
-        subprocess.run([
+        # Different handling for different raster types
+        gdal_cmd = [
             'gdal_translate',
             '-of', 'GTiff',
             '-co', 'TILED=YES',
             '-co', 'COMPRESS=LZW',
-            '-scale',
-            '-ot', 'Byte',
-            str(input_file),
-            str(temp_tif)
-        ], check=True, capture_output=True)
+        ]
+
+        # Check the input file name to determine handling
+        if 'hillshade' in input_file.stem:
+            # Hillshade is already 0-255, no scaling needed
+            gdal_cmd.extend([
+                '-ot', 'Byte',
+                str(input_file),
+                str(temp_tif)
+            ])
+        elif 'aspect' in input_file.stem:
+            # Aspect needs special handling for 0-360 degrees
+            # Scale from 0-360 to 0-255 for visualization
+            gdal_cmd.extend([
+                '-scale', '0', '360', '0', '255',
+                '-ot', 'Byte',
+                str(input_file),
+                str(temp_tif)
+            ])
+        elif 'slope' in input_file.stem:
+            # Slope: scale from actual min/max to 0-255
+            gdal_cmd.extend([
+                '-scale',
+                '-ot', 'Byte',
+                str(input_file),
+                str(temp_tif)
+            ])
+        else:
+            # Default: auto-scale to 0-255
+            gdal_cmd.extend([
+                '-scale',
+                '-ot', 'Byte',
+                str(input_file),
+                str(temp_tif)
+            ])
+
+        subprocess.run(gdal_cmd, check=True, capture_output=True)
 
         # Step 2: Generate XYZ tiles
         xyz_dir = temp_dir / f"{input_file.stem}_xyz"
         click.echo(f"  Generating XYZ tiles (zoom {min_zoom}-{max_zoom})...")
+
+        # Map 'nearest' to 'near' for gdal2tiles.py compatibility
+        gdal2tiles_resampling = 'near' if raster_resampling == 'nearest' else raster_resampling
 
         subprocess.run([
             'gdal2tiles.py',
@@ -176,7 +212,7 @@ def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, 
             '--zoom', f'{min_zoom}-{max_zoom}',
             '--processes', '4',
             '--webviewer', 'none',
-            '-r', raster_resampling,
+            '-r', gdal2tiles_resampling,
             str(temp_tif),
             str(xyz_dir)
         ], check=True, capture_output=True)
