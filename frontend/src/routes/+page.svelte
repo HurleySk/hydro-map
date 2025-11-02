@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import Map from '$lib/components/Map.svelte';
 	import LayerPanel from '$lib/components/LayerPanel.svelte';
 	import LocationSearch from '$lib/components/LocationSearch.svelte';
@@ -9,19 +8,10 @@ import FeatureInfo from '$lib/components/FeatureInfo.svelte';
 import FeatureInfoTool from '$lib/components/FeatureInfoTool.svelte';
 import BaseMapToggle from '$lib/components/BaseMapToggle.svelte';
 import TileStatusPanel from '$lib/components/TileStatusPanel.svelte';
-	import { layers, activeTool } from '$lib/stores';
+	import { activeTool } from '$lib/stores';
 
 	let mapComponent: any;
 	let selectedFeature: any = null;
-
-	onMount(() => {
-		// Initialize default layers
-		layers.update(l => ({
-			...l,
-			hillshade: { visible: true, opacity: 0.6 },
-			streams: { visible: true, opacity: 1.0 },
-		}));
-	});
 
 	function handleMapClick(event: CustomEvent) {
 		const { lngLat, point } = event.detail;

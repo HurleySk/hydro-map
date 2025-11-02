@@ -3,7 +3,7 @@
 
 	const layerGroups: Record<string, string[]> = {
 		'Terrain': ['hillshade', 'slope', 'aspect'],
-		'Hydrology': ['streams', 'contours', 'huc12-outline']
+		'Hydrology': ['streams-nhd', 'streams-dem', 'contours', 'huc12-outline']
 		// 'Geology': ['geology']  // No geology data available
 	};
 
@@ -11,7 +11,8 @@
 		hillshade: 'Hillshade',
 		slope: 'Slope',
 		aspect: 'Aspect',
-		streams: 'Stream Network',
+		'streams-nhd': 'Real Streams',
+		'streams-dem': 'Drainage Network',
 		// geology: 'Geology',  // No geology data available
 		contours: 'Contours',
 		'huc12-outline': 'HUC12 Watersheds'

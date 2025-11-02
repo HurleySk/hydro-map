@@ -51,7 +51,8 @@ export const layers = writable<LayersState>({
 	hillshade: { visible: false, opacity: 0.6 },
 	slope: { visible: false, opacity: 0.7 },
 	aspect: { visible: false, opacity: 0.7 },
-	streams: { visible: true, opacity: 1.0 },
+	'streams-nhd': { visible: true, opacity: 1.0 },  // Real streams from NHD
+	'streams-dem': { visible: false, opacity: 0.7 },  // DEM-derived drainage network
 	// geology: { visible: false, opacity: 0.7 },  // No geology data available
 	contours: { visible: false, opacity: 0.8 },
 	'huc12-fill': { visible: false, opacity: 1.0 },

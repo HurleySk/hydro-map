@@ -53,7 +53,8 @@ const tileSources = [
 	{ id: 'hillshade', label: 'Hillshade', filename: 'hillshade.pmtiles' },
 	{ id: 'slope', label: 'Slope', filename: 'slope.pmtiles' },
 	{ id: 'aspect', label: 'Aspect', filename: 'aspect.pmtiles' },
-	{ id: 'streams', label: 'Streams', filename: 'streams.pmtiles' },
+	{ id: 'streams-nhd', label: 'Real Streams', filename: 'streams_nhd.pmtiles' },
+	{ id: 'streams-dem', label: 'Drainage Network', filename: 'streams_dem.pmtiles' },
 	{ id: 'geology', label: 'Geology', filename: 'geology.pmtiles' },
 	{ id: 'contours', label: 'Contours', filename: 'contours.pmtiles' },
 	{ id: 'huc12', label: 'HUC12 Watersheds', filename: 'huc12.pmtiles' }
@@ -151,8 +152,8 @@ function headerToBounds(header: any): TileHeaderBounds {
 			};
 
 			if (!centerWithinCoverage()) {
-				// Prefer streams coverage if available, else any available header
-				const preferred = tileMetadata.get('streams')?.header || Array.from(tileMetadata.values()).find(m => m.header)?.header;
+				// Prefer NHD streams coverage if available, else any available header
+				const preferred = tileMetadata.get('streams-nhd')?.header || tileMetadata.get('streams-dem')?.header || Array.from(tileMetadata.values()).find(m => m.header)?.header;
 				if (preferred) {
 					initialCenter = [
 						(preferred.minLon + preferred.maxLon) / 2,
@@ -375,9 +376,13 @@ function headerToBounds(header: any): TileHeaderBounds {
 				url: buildPmtilesUrl('aspect.pmtiles'),
 				tileSize: 256
 			},
-			streams: {
+			'streams-nhd': {
 				type: 'vector',
-				url: buildPmtilesUrl('streams.pmtiles')
+				url: buildPmtilesUrl('streams_nhd.pmtiles')
+			},
+			'streams-dem': {
+				type: 'vector',
+				url: buildPmtilesUrl('streams_dem.pmtiles')
 			},
 			// geology: {  // No geology data available
 			// 	type: 'vector',
@@ -476,54 +481,75 @@ function headerToBounds(header: any): TileHeaderBounds {
 					// }
 				// },
 				{
-					id: 'streams',
+					id: 'streams-nhd',
 					type: 'line',
-					source: 'streams',
-					'source-layer': 'streams',
+					source: 'streams-nhd',
+					'source-layer': 'streams_nhd',
 					layout: { visibility: 'visible' },
 					paint: {
-						// Color by drainage area (darker blue = larger drainage area)
+						// Solid blue for real streams
+						'line-color': '#1e3a8a',  // Dark blue
+						// Width by stream order
+						'line-width': [
+							'interpolate',
+							['linear'],
+							['zoom'],
+							8, 1.0,
+							14, 2.5,
+							17, 4.0
+						],
+						'line-opacity': 1.0
+					}
+				},
+				{
+					id: 'streams-dem',
+					type: 'line',
+					source: 'streams-dem',
+					'source-layer': 'streams',  // Layer name from DEM processing
+					layout: { visibility: 'none' },  // Hidden by default per stores.ts
+					paint: {
+						// Darker blue gradient for drainage network
 						'line-color': [
 							'interpolate',
 							['linear'],
 							['coalesce', ['get', 'drainage_area_sqkm'], 0],
-							0, '#60a5fa',      // Very small streams: medium-light blue (darker than before)
-							1, '#3b82f6',      // Small streams: blue
-							5, '#2563eb',      // Medium streams: medium-dark blue
-							15, '#1d4ed8',     // Large streams: dark blue
-							50, '#1e40af'      // Very large streams: very dark blue
+							0, '#2563eb',      // Very small: medium-dark blue
+							1, '#1e40af',      // Small: dark blue
+							5, '#1e3a8a',      // Medium: darker blue
+							15, '#172554',     // Large: very dark blue
+							50, '#0f172a'      // Very large: almost navy
 						],
-						// Width by stream order and zoom level
+						// Thinner lines for drainage network
 						'line-width': [
 							'interpolate',
 							['linear'],
 							['zoom'],
 							8, [
 								'match',
-								['coalesce', ['get', 'stream_order'], 1],
-								1, 0.5,
-								2, 0.8,
-								3, 1.2,
-								0.5 // fallback
+								['coalesce', ['get', 'order'], 1],
+								1, 0.3,
+								2, 0.5,
+								3, 0.8,
+								0.3 // fallback
 							],
 							14, [
 								'match',
-								['coalesce', ['get', 'stream_order'], 1],
+								['coalesce', ['get', 'order'], 1],
+								1, 0.8,
+								2, 1.5,
+								3, 2.0,
+								0.8 // fallback
+							],
+							17, [
+								'match',
+								['coalesce', ['get', 'order'], 1],
 								1, 1.5,
 								2, 2.5,
 								3, 3.5,
 								1.5 // fallback
-							],
-							17, [
-								'match',
-								['coalesce', ['get', 'stream_order'], 1],
-								1, 2.5,
-								2, 4,
-								3, 5.5,
-								2.5 // fallback
 							]
 						],
-						'line-opacity': 0.9
+						'line-opacity': 0.7
 					}
 				},
 				{
@@ -831,7 +857,7 @@ async function initializeTileStatus() {
 			pmtilesProtocol?.add(pmtiles);
 
 			// Verify vector layer metadata for vector tiles
-			if (src.id === 'streams' || src.id === 'contours' || src.id === 'huc12') {
+			if (src.id === 'streams-nhd' || src.id === 'streams-dem' || src.id === 'contours' || src.id === 'huc12') {
 				try {
 					const metadata: any = await pmtiles.getMetadata();
 					if (metadata && metadata.vector_layers) {
