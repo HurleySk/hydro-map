@@ -1,5 +1,7 @@
 # Stream Network Data
 
+**Version**: 1.2.1
+
 ## Overview
 
 Hydro-Map uses a **pure DEM-derived stream network** that works globally without requiring external datasets like NHD (National Hydrography Dataset). This approach:
@@ -9,6 +11,8 @@ Hydro-Map uses a **pure DEM-derived stream network** that works globally without
 - Includes drainage area as the primary attribute
 - Classifies flow persistence (Perennial/Intermittent/Ephemeral)
 - Computes confidence scores to identify potential artifacts
+
+**Note**: As of v1.1.1, the application supports **both** DEM-derived streams (`streams-dem` layer) AND NHD-based streams (`streams-nhd` layer) simultaneously. Users can toggle between them for comparison or validation.
 
 ## Methodology
 
@@ -183,6 +187,80 @@ The QA workflow generates a comprehensive report including:
 - **All ephemeral classification**:
   - Fine threshold capturing headwaters (expected for t100/t250)
   - Use t500 or t1000 for perennial streams
+
+## UI Integration and Output
+
+### PMTiles Output
+
+The tile generation pipeline creates **`streams_dem.pmtiles`** from the processed stream GeoPackage:
+
+```bash
+python scripts/generate_tiles.py \
+  --data-dir data/processed \
+  --output-dir data/tiles
+```
+
+**Input**: `data/processed/streams_dem.gpkg` (filtered stream network)
+**Output**: `data/tiles/streams_dem.pmtiles` (vector tiles, z8-17)
+
+### Vector Layer Naming
+
+**IMPORTANT**: The internal layer name in PMTiles must be `streams` (not `streams_t250_filtered` or `streams_dem`).
+
+The tile generation script automatically names the internal layer `streams` for frontend compatibility:
+
+```typescript
+// frontend/src/lib/config/layers.ts
+{
+  id: 'streams-dem',
+  label: 'DEM-Derived Streams',
+  filename: 'streams_dem.pmtiles',
+  vectorLayerId: 'streams',  // Must match internal PMTiles layer name
+  // ...
+}
+```
+
+Mismatch between `vectorLayerId` and internal layer name will cause the layer not to render.
+
+### Map Layer Appearance
+
+In the Hydro-Map UI:
+
+- **Layer name**: "DEM-Derived Streams"
+- **Layer group**: Hydrology
+- **Default visibility**: Hidden (not visible by default)
+- **Style**: Blue gradient by drainage area (darker = larger drainage)
+- **Toggle**: Users can enable/disable independently from NHD streams
+
+### Comparing with NHD
+
+The application supports **simultaneous display** of both stream sources:
+
+- **DEM-Derived Streams** (this methodology): Global coverage, shows ephemeral channels
+- **Real Streams** (NHD): US-only, curated official network with names
+
+Users can toggle both layers on to:
+- Validate DEM extraction quality
+- Identify streams present in DEM but missing from NHD (ephemeral channels)
+- Identify streams in NHD but missing from DEM (data resolution issues)
+
+This dual-layer approach provides comprehensive stream coverage and quality validation.
+
+### Automation Script
+
+The complete workflow from DEM to filtered streams is automated:
+
+```bash
+bash scripts/workflow_pure_dem_streams.sh
+```
+
+This script runs:
+1. Multi-threshold stream extraction (t100, t250, t500, t1000)
+2. Filtering with recommended parameters
+3. Quality assurance report generation
+4. Final output preparation
+
+See the script for customization options.
 
 ## Workflow Scripts
 
@@ -362,16 +440,18 @@ See `scripts/workflow_pure_dem_streams.sh` for the full automated pipeline.
 
 ## Updates and Versioning
 
-**Current version**: 1.0 (Pure DEM implementation, November 2025)
+**Current version**: 1.2.1 (Dual stream network support)
 
-**Previous approach**: NHD-based stream network (discontinued due to US-only coverage)
+**Stream network evolution**:
+- **v1.1.1+ (2025-11)**: Dual stream network - DEM-derived AND NHD-based layers available simultaneously
+- **v1.0 (2025-11)**: Pure DEM implementation with multi-threshold extraction, artifact filtering, and confidence scoring
+- **v0.x (2024-2025)**: NHD-based approach only (US only)
 
-**Change log**:
-- **v1.0 (2025-11)**: Implemented pure DEM approach with multi-threshold extraction, artifact filtering, and confidence scoring
-- **v0.x (2024-2025)**: NHD-based approach (US only)
+**Note**: NHD streams are NOT discontinued. As of v1.1.1, the application supports both DEM-derived and NHD-based streams as independent toggleable layers. Users can display one, both, or neither depending on their needs.
 
 **Future enhancements**:
 - Climate-adjusted flow persistence thresholds
 - Machine learning artifact detection
 - Integration with global river datasets (e.g., HydroRIVERS) for validation
 - Upstream area calculation for pour points
+- Automated stream name assignment using proximity to NHD features

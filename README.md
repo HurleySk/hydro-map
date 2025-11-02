@@ -1,5 +1,7 @@
 # Hydro-Map
 
+**Version 1.2.2**
+
 An interactive web application for exploring hydrological and geological features, with on-demand watershed delineation, cross-section analysis, and multi-layer visualization.
 
 ## Features
@@ -7,12 +9,14 @@ An interactive web application for exploring hydrological and geological feature
 ### Core Capabilities
 
 - **On-Demand Watershed Delineation**: Click any point on the map to instantly compute the upstream catchment area with detailed statistics.
-- **Stream Network Visualization**: Interactive stream lines with Strahler order, flow direction, and length attributes.
+- **Water Accumulation Heatmap**: Visualize upslope water accumulation patterns with a blue gradient heatmap showing drainage intensity.
+- **Dual Stream Networks**: Visualize both NHD-based real streams and DEM-derived calculated streams with Strahler order, flow direction, and length attributes.
+- **HUC12 Watershed Boundaries**: Reference layer showing USGS hydrologic unit boundaries with labels.
 - **Terrain Analysis**: Toggle hillshade, slope, aspect, and contour visualizations derived from the DEM.
-- **Geological Mapping**: Overlay bedrock/surficial geology (when provided) with formation metadata.
-- **Cross-Section Tool**: Draw a line to generate elevation and geology profiles, complete with a sparkline preview.
-- **Feature Queries**: Inspect streams and geology at a clicked location using the Feature Info panel.
-- **Tile Health Monitoring**: A built-in tile status panel reports coverage and reachability for every PMTiles source.
+- **Cross-Section Tool**: Draw a line to generate elevation profiles along any transect.
+- **Feature Queries**: Inspect stream attributes at clicked locations using the Feature Info panel.
+- **Dynamic Legend**: Color gradient legend that appears when water accumulation layer is active.
+- **Tile Health Monitoring**: Built-in tile status panel reports coverage, reachability, and max zoom for every PMTiles source.
 
 ### Technical Highlights
 
@@ -23,118 +27,56 @@ An interactive web application for exploring hydrological and geological feature
 
 ## Architecture
 
-```
-hydro-map/
-├── frontend/          # SvelteKit + MapLibre GL JS
-│   ├── src/
-│   │   ├── routes/   # Application pages
-│   │   └── lib/      # Components and stores
-│   └── package.json
-├── backend/           # FastAPI + Python
-│   ├── app/
-│   │   ├── routes/   # API endpoints
-│   │   └── services/ # Business logic
-│   └── requirements.txt
-├── scripts/           # Data preprocessing
-│   ├── prepare_dem.py
-│   ├── prepare_streams.py
-│   └── generate_tiles.py
-└── data/
-    ├── raw/          # Original DEM, NHD, geology data
-    ├── processed/    # Flow grids, prepared vectors
-    └── tiles/        # PMTiles for web serving
-```
+**Frontend**: SvelteKit + MapLibre GL JS + PMTiles
+**Backend**: FastAPI + Python geospatial stack (WhiteboxTools, GDAL)
+**Data Pipeline**: Preprocessing scripts for DEM analysis, stream extraction, and tile generation
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed component hierarchy and data flow.
 
 ## Quick Start
 
 ### Prerequisites
 
-- **Python 3.11+**
-- **Node.js 20+**
-- **GDAL** (for data processing)
-- **Tippecanoe** (for vector tiles)
-- **PMTiles CLI** (for tile conversion)
+- **Python 3.12+** (with pip)
+- **Node.js 20+** (with npm)
+- **GDAL, Tippecanoe, PMTiles CLI** (for data processing)
+
+See [docs/QUICK_START.md](docs/QUICK_START.md) for detailed installation and setup instructions.
 
 ### Installation
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/HurleySk/hydro-map.git
-   cd hydro-map
-   ```
+```bash
+git clone https://github.com/HurleySk/hydro-map.git
+cd hydro-map
 
-2. **Set up environment**
-   ```bash
-   cp .env.example .env
-   # Edit .env to configure paths and settings
-   ```
-   - Optional: create `frontend/.env` with `VITE_TILE_BASE=http://localhost:8000` so the dev frontend fetches PMTiles directly from the backend (avoids proxy issues with range requests).
+# Backend
+cd backend && pip install -r requirements.txt
 
-3. **Install backend dependencies**
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   ```
+# Frontend
+cd ../frontend && npm install
 
-4. **Install frontend dependencies**
-   ```bash
-   cd ../frontend
-   npm install
-   ```
+# Configure environment
+cp .env.example .env  # Edit paths as needed
+```
 
 ### Data Preparation
 
-Before running the application, you need to prepare your data:
+Prepare your DEM data and generate tiles:
 
-1. **Obtain DEM data**
-   - US: Download 10m 3DEP from [USGS National Map](https://apps.nationalmap.gov/downloader/)
-   - Global: Download Copernicus GLO-30 from [Copernicus](https://portal.opentopography.org/raster?opentopoID=OTSDEM.032021.4326.3)
+```bash
+# 1. Process DEM → flow grids + terrain products
+python scripts/prepare_dem.py --input data/raw/dem/elevation.tif --output data/processed/dem/
 
-2. **Place raw data**
-   ```bash
-   # Put your DEM in data/raw/dem/
-   data/raw/dem/elevation.tif
-   ```
+# 2. Extract DEM-derived streams
+python scripts/prepare_streams.py --flow-acc data/processed/dem/flow_accumulation.tif --output data/processed/streams_dem.gpkg
 
-3. **Run preprocessing scripts**
-   ```bash
-   # Process DEM (fills sinks, computes flow direction/accumulation, terrain products)
-   python scripts/prepare_dem.py \
-     --input data/raw/dem/elevation.tif \
-     --output data/processed/dem/
+# 3. Generate PMTiles (hillshade, slope, aspect, contours, streams)
+python scripts/generate_tiles.py --data-dir data/processed --output-dir data/tiles --max-zoom 17
+```
 
-   # Extract stream network
-   python scripts/prepare_streams.py \
-     --flow-acc data/processed/dem/flow_accumulation.tif \
-     --flow-dir data/processed/dem/flow_direction.tif \
-     --output data/processed/streams.gpkg \
-     --threshold 1000
-
-   # Generate PMTiles for web serving
-   python scripts/generate_tiles.py \
-     --data-dir data/processed \
-     --output-dir data/tiles \
-     --min-zoom 8 \
-     --max-zoom 17 \
-     --contour-interval 2
-   ```
-   - By default the script emits 1 m contour isolines; the example above passes `--contour-interval 2`, which pairs well with the 200 m/100 m target scale. Adjust `--max-zoom` or `--contour-interval` to suit your DEM resolution and styling goals.
-   - Use the new `--raster-resampling` flag (default: `lanczos`) to fine-tune raster sharpness—switch to `nearest` for categorical rasters such as aspect or landcover.
-
-4. **(Optional) Add geology data**
-   - Download geology layers from [USGS](https://mrdata.usgs.gov/geology/state/)
-   - Convert to GeoPackage: `ogr2ogr -f GPKG data/processed/geology.gpkg geology.shp`
-
-> **Tip:** after generating tiles, verify that the backend can see them:
-> ```bash
-> curl -I http://localhost:8000/tiles/hillshade.pmtiles
-> curl -I http://localhost:8000/tiles/streams.pmtiles
-> ```
-> A `200 OK` response (with `Accept-Ranges: bytes`) confirms the files are in place and will render when toggled in the map.
+For complete workflows including NHD stream processing and HUC12 boundaries, see [docs/DATA_PREPARATION.md](docs/DATA_PREPARATION.md).
 
 ### Running the Application
-
-#### Option 1: Development Mode (Recommended)
 
 **Terminal 1 - Backend:**
 ```bash
@@ -150,113 +92,63 @@ npm run dev
 # Frontend runs on http://localhost:5173
 ```
 
-Open http://localhost:5173 in your browser. The map boots focused on Mason District Park (Annandale, VA); adjust `mapView` in local storage or `DEFAULT_CENTER` in `Map.svelte` if your study area differs.
+Open http://localhost:5173 in your browser. The map boots focused on San Francisco, CA (default location); adjust `mapView` in local storage or `DEFAULT_CENTER` in `frontend/src/lib/stores.ts` if your study area differs.
 
-#### Option 2: Docker Compose
-
+**Docker Option:**
 ```bash
-docker-compose up
+docker-compose up  # Access at http://localhost:5173
 ```
-
-Access at http://localhost:5173
 
 ## Usage
 
+See [docs/UI_GUIDE.md](docs/UI_GUIDE.md) for comprehensive usage instructions. Quick overview:
+
 ### Watershed Delineation
 
-1. Click the **"Delineate Watershed"** button in the left panel
-2. Optionally enable **"Snap to nearest stream"** to snap pour points to high flow accumulation
+1. Click **"Delineate Watershed"** in the Analysis Tools panel
+2. Optionally enable **"Snap to nearest stream"**
 3. Click anywhere on the map
-4. The upstream watershed polygon appears with statistics:
-  - Area (km², mi²)
-  - Perimeter
-  - Elevation statistics (min/max/mean/std)
+4. View upstream watershed polygon with area, perimeter, and elevation statistics
 
-Results are cached by snapped location for fast repeated queries.
+Results are cached by location for fast repeated queries.
 
 ### Cross-Section Profiles
 
 1. Click **"Draw Cross-Section"**
-2. Click 2+ points on the map to define a profile line
-3. Click **"Generate Profile"**
-4. View elevation profile with:
-   - DEM-based terrain elevation
-   - Surface geology contacts where line crosses formations
-   - Formation names and rock types
+2. Click 2+ points to define a profile line
+3. Click **"Generate Profile"** to view elevation along the transect
 
 ### Layer Controls
 
-Use the **Layers** panel to:
-- Toggle visibility of terrain, streams, contours, and more.
-- Adjust opacity per layer to blend terrain with vector overlays.
-- Combine multiple layers for richer analysis sessions.
+- **Map Layers panel**: Toggle visibility and adjust opacity for terrain, streams, contours, HUC12 boundaries
+- **Terrain group**: Hillshade, slope, aspect
+- **Hydrology group**: Real streams (NHD), calculated streams (DEM-derived), HUC12 boundaries
 
 ### Feature Information
 
-Click **Feature Info** mode and click the map to see attributes of:
-- Nearby streams (name, order, length)
-- Geology at the point (formation, rock type, age)
+Click **Feature Info** mode and click the map to inspect nearby stream attributes (name, Strahler order, length).
 
-### Basemap & Visibility Tools
+### Tile Status
 
-- Switch between the default color basemap, a light-gray background, or hide the basemap entirely via the **Basemap** panel for better overlay control.
-- The layer checklist reflects live MapLibre state—if toggling a layer has no visual effect, confirm the PMTiles exist for the current extent (see troubleshooting below).
-- The **Tile Status** panel automatically checks reachability and coverage for each PMTiles source whenever you pan or zoom.
-
-### Layer Visibility Checklist
-
-Use the **Tile Status** panel in the left controls to confirm whether each PMTiles source covers the current map view; it now reports each archive’s native max zoom and flags when you are overzooming beyond it. Additionally, the following manual checks can help:
-
-1. **Tiles reachable?**  
-   Check DevTools → Network for `/tiles/*.pmtiles` requests. A `404` or `502` means the backend isn’t serving the files.
-2. **Coverage matches AOI?**  
-   Pan to the default start location (Mason District Park, Annandale, VA). If tiles were generated elsewhere, rebuild them for this extent.
-3. **Vector layer names**  
-   Run `pmtiles info data/tiles/streams.pmtiles` and ensure the layer name is `streams` (matching the map source-layer).
-
-Re-run the preprocessing scripts or regenerate PMTiles as needed; restarting the backend will reload new files automatically.
+The **System Status panel** shows coverage and max zoom for all PMTiles sources. Use it to verify tile availability for your current map extent.
 
 ## API Endpoints
 
-### Watershed Delineation
-```
-POST /api/delineate
-{
-  "lat": 37.7749,
-  "lon": -122.4194,
-  "snap_to_stream": true,
-  "snap_radius": 100
-}
-```
+See [docs/API.md](docs/API.md) for complete API documentation with schemas and examples.
 
-### Cross-Section
-```
-POST /api/cross-section
-{
-  "line": [[-122.4, 37.77], [-122.3, 37.78]],
-  "sample_distance": 10
-}
-```
+**Quick reference:**
 
-### Feature Info
-```
-POST /api/feature-info
-{
-  "lat": 37.7749,
-  "lon": -122.4194,
-  "layers": ["streams", "geology"],
-  "buffer": 50
-}
-```
+- `POST /api/delineate` - Watershed delineation with optional stream snapping
+- `GET /api/delineate/status` - Check data file availability
+- `POST /api/cross-section` - Generate elevation profiles
+- `POST /api/feature-info` - Query stream/geology attributes
+- `GET /tiles/{filename}` - PMTiles serving with range request support
 
 ## Configuration
 
-Edit `.env` to customize:
+Edit `.env` to customize data paths, delineation settings, and server options.
 
-- **Data paths**: DEM, flow grids, streams, geology
-- **Delineation settings**: Snap radius, cache options
-- **Cross-section**: Sample distance, max points
-- **Server**: Host, port, CORS origins
+See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete configuration reference.
 
 ## Data Sources
 
@@ -265,7 +157,7 @@ Edit `.env` to customize:
 - **DEM (US)**: [USGS 3DEP 10m](https://www.usgs.gov/3d-elevation-program)
 - **DEM (Global)**: [Copernicus GLO-30](https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model)
 - **Streams (US)**: [NHD/NHDPlus](https://www.usgs.gov/national-hydrography/national-hydrography-dataset)
-- **Geology (US)**: [USGS State Geologic Maps](https://mrdata.usgs.gov/geology/state/)
+- **Watersheds (US)**: [USGS WBD/HUC12](https://www.usgs.gov/national-hydrography/watershed-boundary-dataset)
 
 ### Processing Tools
 
@@ -278,62 +170,52 @@ Edit `.env` to customize:
 
 ### Project Structure
 
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed component hierarchy.
+
 ```
-frontend/src/
-├── routes/+page.svelte          # Main application shell
-├── lib/
-│   ├── components/
-│   │   ├── Map.svelte           # MapLibre integration & PMTiles protocol
-│   │   ├── LayerPanel.svelte    # Layer toggles & opacity sliders
-│   │   ├── WatershedTool.svelte # Delineation controls & summary
-│   │   ├── CrossSectionTool.svelte
-│   │   ├── FeatureInfoTool.svelte
-│   │   ├── FeatureInfo.svelte
-│   │   ├── TileStatusPanel.svelte
-│   │   └── BaseMapToggle.svelte
-│   ├── stores.ts                # Central Svelte stores (layers, tools, state)
-│   └── utils/                   # Local storage helpers & geocoding client
+frontend/src/lib/
+├── components/          # UI components
+│   ├── Map.svelte      # MapLibre + PMTiles Protocol
+│   ├── LayerPanel.svelte
+│   ├── WatershedTool.svelte
+│   └── ...
+├── config/layers.ts    # Centralized layer configuration (LAYER_SOURCES)
+└── stores.ts           # Svelte stores for state management
 
 backend/app/
-├── main.py                      # FastAPI ASGI application
-├── config.py                    # Environment-backed settings via Pydantic
-├── routes/
-│   ├── delineate.py             # Watershed delineation API
-│   ├── cross_section.py         # Elevation & geology profile API
-│   ├── features.py              # Stream/geology feature info API
-│   └── tiles.py                 # PMTiles range request handler
-└── services/
-    ├── watershed.py             # Hydrology utilities (snapping, tracing, stats)
-    └── cache.py                 # File/Redis cache abstraction for delineations
+├── main.py             # FastAPI application
+├── routers/            # API endpoints
+└── services/           # Business logic
 ```
 
 ### Adding New Layers
 
-1. Add layer configuration to `frontend/src/lib/stores.ts`
-2. Add source and layer to MapLibre style in `Map.svelte`
-3. Add layer controls to `LayerPanel.svelte`
-4. Generate tiles with `scripts/generate_tiles.py`
+1. Add layer configuration to `frontend/src/lib/config/layers.ts` (LAYER_SOURCES)
+2. Layers are automatically registered in the UI (Map.svelte reads from LAYER_SOURCES)
+3. Generate tiles with `scripts/generate_tiles.py`
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development workflow and code style guidelines.
 
 ## Troubleshooting
 
-### "Delineation failed" Error
-- Ensure preprocessing scripts have been run
-- Check that `data/processed/dem/` contains flow_direction.tif and flow_accumulation.tif
-- Verify paths in `.env` match your data structure
+See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for comprehensive troubleshooting guide.
 
-### "Required data files not found"
-- Check `/api/delineate/status` endpoint to see which files are missing
-- Re-run `prepare_dem.py` script
+**Common issues:**
 
-### Slow Performance
-- Reduce DEM resolution for faster processing
-- Increase stream extraction threshold in `prepare_streams.py`
-- Enable caching in `.env` (CACHE_ENABLED=true)
+- **"Delineation failed"**: Ensure `data/processed/dem/` contains flow_direction.tif and flow_accumulation.tif
+- **"Required data files not found"**: Check `/api/delineate/status` endpoint, re-run prepare_dem.py
+- **No tiles appearing**: Verify tiles exist in `data/tiles/`, check browser console for errors, use Tile Status panel
 
-### No Tiles Appearing
-- Ensure tiles are generated in `data/tiles/`
-- Check browser console for tile loading errors
-- Verify PMTiles paths in MapLibre style
+## Documentation
+
+- [Architecture Guide](docs/ARCHITECTURE.md) - Detailed component hierarchy and data flow
+- [Quick Start Guide](docs/QUICK_START.md) - Step-by-step installation and setup
+- [Data Preparation](docs/DATA_PREPARATION.md) - Complete workflows for DEM, streams, HUC12
+- [API Reference](docs/API.md) - Complete API documentation with schemas
+- [UI Guide](docs/UI_GUIDE.md) - Frontend features and usage
+- [Configuration](docs/CONFIGURATION.md) - Environment variables and settings
+- [Deployment](docs/DEPLOYMENT.md) - Production deployment guide
+- [Troubleshooting](docs/TROUBLESHOOTING.md) - Common issues and solutions
 
 ## License
 
@@ -348,7 +230,7 @@ MIT License - See LICENSE file for details
 
 ## Contributing
 
-Contributions welcome! Please open issues or pull requests on GitHub.
+Contributions welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## Contact
 

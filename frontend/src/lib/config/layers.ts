@@ -143,6 +143,18 @@ export const LAYER_SOURCES: LayerSource[] = [
     }
   },
   {
+    id: 'flow-accum',
+    label: 'Water Accumulation',
+    filename: 'flow_accum.pmtiles',
+    type: 'raster',
+    defaultVisible: false,
+    defaultOpacity: 0.65,
+    category: 'hydrology',
+    description: 'Visualizes upslope water accumulation patterns with blue heatmap',
+    minZoom: 8,
+    maxZoom: 17
+  },
+  {
     id: 'contours',
     label: 'Contours',
     filename: 'contours.pmtiles',

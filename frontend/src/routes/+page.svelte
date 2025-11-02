@@ -8,7 +8,8 @@ import FeatureInfo from '$lib/components/FeatureInfo.svelte';
 import FeatureInfoTool from '$lib/components/FeatureInfoTool.svelte';
 import TileStatusPanel from '$lib/components/TileStatusPanel.svelte';
 import CollapsiblePanel from '$lib/components/CollapsiblePanel.svelte';
-	import { activeTool, panelStates } from '$lib/stores';
+import Legend from '$lib/components/Legend.svelte';
+	import { activeTool, panelStates, layers } from '$lib/stores';
 
 	let mapComponent: any;
 	let selectedFeature: any = null;
@@ -92,6 +93,10 @@ import CollapsiblePanel from '$lib/components/CollapsiblePanel.svelte';
 					activeTool.set('none');
 				}}
 			/>
+		{/if}
+
+		{#if $layers['flow-accum']?.visible}
+			<Legend opacity={$layers['flow-accum'].opacity} />
 		{/if}
 	</main>
 </div>
