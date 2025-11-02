@@ -6,7 +6,6 @@ import WatershedTool from '$lib/components/WatershedTool.svelte';
 import CrossSectionTool from '$lib/components/CrossSectionTool.svelte';
 import FeatureInfo from '$lib/components/FeatureInfo.svelte';
 import FeatureInfoTool from '$lib/components/FeatureInfoTool.svelte';
-import BaseMapToggle from '$lib/components/BaseMapToggle.svelte';
 import TileStatusPanel from '$lib/components/TileStatusPanel.svelte';
 	import { activeTool } from '$lib/stores';
 
@@ -51,7 +50,6 @@ import TileStatusPanel from '$lib/components/TileStatusPanel.svelte';
 
 		<aside class="controls">
 			<LocationSearch on:select={handleLocationSelect} />
-			<BaseMapToggle />
 			<LayerPanel />
 			<FeatureInfoTool />
 			<WatershedTool />

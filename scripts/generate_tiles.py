@@ -19,7 +19,12 @@ import click
 from pathlib import Path
 import subprocess
 import json
+import sys
 from tqdm import tqdm
+
+# Add path for local imports
+sys.path.insert(0, str(Path(__file__).parent))
+from lib.tools import ensure_tools_available, RASTER_TOOLS, VECTOR_TOOLS, PMTILES_TOOLS
 
 
 @click.command()
@@ -59,14 +64,41 @@ from tqdm import tqdm
     default='lanczos',
     help='Resampling kernel for raster tiles (default: lanczos)'
 )
-def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval, raster_resampling):
+@click.option(
+    '--check-tools',
+    is_flag=True,
+    help='Check required tools and exit'
+)
+def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval, raster_resampling, check_tools):
     """Generate PMTiles from processed data."""
+
+    # Define all required tools
+    required_tools = [
+        'gdal2tiles.py',
+        'gdal_translate',
+        'gdal_contour',
+        'gdaldem',
+        'tippecanoe',
+        'mb-util',
+        'pmtiles',
+        'ogr2ogr'
+    ]
+
+    # Check tools if requested or validate before running
+    if check_tools:
+        click.echo("Checking required tools...")
+        success = ensure_tools_available(required_tools, exit_on_missing=False, verbose=True)
+        sys.exit(0 if success else 1)
+    else:
+        # Validate tools are available before starting
+        click.echo("Validating required tools...")
+        ensure_tools_available(required_tools, exit_on_missing=True, verbose=False)
 
     data_path = Path(data_dir)
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    click.echo("Generating tiles...")
+    click.echo("\nGenerating tiles...")
     click.echo(f"Data directory: {data_path}")
     click.echo(f"Output directory: {output_path}")
     click.echo(f"Zoom levels: {min_zoom}-{max_zoom}")

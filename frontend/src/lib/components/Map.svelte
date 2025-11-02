@@ -15,9 +15,11 @@ import {
 	watershedOutlets,
 	latestDelineation,
 	delineationSettings,
-	basemapStyle,
 	tileStatus
 } from '$lib/stores';
+import { LAYER_SOURCES, getLayerPMTilesUrl } from '$lib/config/layers';
+import { getApiUrl, apiPost } from '$lib/api/config';
+import { mapLogger as logger } from '$lib/utils/logger';
 
 	const dispatch = createEventDispatcher();
 
@@ -29,7 +31,6 @@ let unsubscribeLayers: () => void = () => {};
 let unsubscribeWatersheds: () => void = () => {};
 let unsubscribeCrossSection: () => void = () => {};
 let unsubscribeOutlets: () => void = () => {};
-let unsubscribeBasemap: () => void = () => {};
 let mapReady = false; // Track when map is fully initialized
 let styleReady = false; // Track when style graph is ready
 let updateQueue: Array<{ type: string; data: any }> = []; // Queue for updates before style ready
@@ -49,16 +50,8 @@ type TileMeta = {
 	error?: string;
 };
 
-const tileSources = [
-	{ id: 'hillshade', label: 'Hillshade', filename: 'hillshade.pmtiles' },
-	{ id: 'slope', label: 'Slope', filename: 'slope.pmtiles' },
-	{ id: 'aspect', label: 'Aspect', filename: 'aspect.pmtiles' },
-	{ id: 'streams-nhd', label: 'Real Streams', filename: 'streams_nhd.pmtiles' },
-	{ id: 'streams-dem', label: 'Drainage Network', filename: 'streams_dem.pmtiles' },
-	{ id: 'geology', label: 'Geology', filename: 'geology.pmtiles' },
-	{ id: 'contours', label: 'Contours', filename: 'contours.pmtiles' },
-	{ id: 'huc12', label: 'HUC12 Watersheds', filename: 'huc12.pmtiles' }
-];
+// Use centralized layer configuration
+const tileSources = LAYER_SOURCES;
 
 const tileMetadata = new Map<string, TileMeta>();
 
@@ -201,13 +194,13 @@ function headerToBounds(header: any): TileHeaderBounds {
 		// Initialize once the style has loaded. Avoid relying on 'idle', which can
 		// hang indefinitely if any source never finishes loading.
 		// Subscribe immediately without waiting for map ready events
-		console.log('[Map] Setting up store subscriptions immediately');
+		logger.log('Setting up store subscriptions immediately');
 		unsubscribeLayers = layers.subscribe((state) => {
-			console.log('[debug] layers store changed:', state);
+			logger.debug('layers store changed:', state);
 			if (styleReady) {
 				applyLayerState(state);
 			} else {
-				console.log('[Map] Queuing layer update for when style is ready');
+				logger.log(' Queuing layer update for when style is ready');
 				updateQueue.push({ type: 'layers', data: state });
 			}
 		});
@@ -236,17 +229,9 @@ function headerToBounds(header: any): TileHeaderBounds {
 			}
 		});
 
-		unsubscribeBasemap = basemapStyle.subscribe((state) => {
-			if (styleReady) {
-				updateBasemap(state);
-			} else {
-				updateQueue.push({ type: 'basemap', data: state });
-			}
-		});
-
 		// Add diagnostic event logging
 		map.on('style.load', () => {
-			console.log('[Map] style.load event fired - style graph ready');
+			logger.log(' style.load event fired - style graph ready');
 			styleReady = true;
 			mapReady = true;
 			processUpdateQueue();
@@ -254,24 +239,24 @@ function headerToBounds(header: any): TileHeaderBounds {
 		});
 
 		map.on('styledata', () => {
-			console.log('[Map] styledata event fired');
+			logger.log(' styledata event fired');
 		});
 
 		map.on('sourcedata', (e) => {
-			console.log('[Map] sourcedata event fired for:', e.sourceId);
+			logger.log(' sourcedata event fired for:', e.sourceId);
 		});
 
 		map.on('load', () => {
-			console.log('[Map] load event fired - all initial sources loaded');
+			logger.log(' load event fired - all initial sources loaded');
 		});
 
 		map.on('idle', () => {
-			console.log('[Map] idle event fired - rendering complete');
+			logger.log(' idle event fired - rendering complete');
 		});
 
 		// Process queued updates
 		function processUpdateQueue() {
-			console.log(`[Map] Processing ${updateQueue.length} queued updates`);
+			logger.log(`Processing ${updateQueue.length} queued updates`);
 			const queue = [...updateQueue];
 			updateQueue = [];
 
@@ -288,9 +273,6 @@ function headerToBounds(header: any): TileHeaderBounds {
 						break;
 					case 'outlets':
 						updateOutletLayer(update.data);
-						break;
-					case 'basemap':
-						updateBasemap(update.data);
 						break;
 				}
 			}
@@ -330,308 +312,188 @@ function headerToBounds(header: any): TileHeaderBounds {
 		}, 500);
 	}
 
+	function buildLayersFromConfig(): any[] {
+		const configuredLayers: any[] = [];
+
+		// Build layers from LAYER_SOURCES configuration
+		for (const layer of LAYER_SOURCES) {
+			if (layer.id === 'huc12') {
+				// Special handling for HUC12 with its 3 sub-layers
+				configuredLayers.push(
+					{
+						id: 'huc12-fill',
+						type: 'fill',
+						source: 'huc12',
+						'source-layer': 'huc12',
+						layout: { visibility: 'none' },
+						paint: {
+							'fill-color': [
+								'match',
+								['get', 'name'],
+								'Accotink Creek', '#fbbf24',           // Amber/Yellow
+								'Fourmile Run-Potomac River', '#a78bfa', // Purple
+								'Cameron Run', '#60a5fa',               // Blue
+								'Pohick Creek', '#34d399',              // Green
+								'#fbbf24' // fallback
+							],
+							'fill-opacity': 0.2
+						}
+					},
+					{
+						id: 'huc12-outline',
+						type: 'line',
+						source: 'huc12',
+						'source-layer': 'huc12',
+						layout: { visibility: 'none' },
+						paint: {
+							'line-color': [
+								'match',
+								['get', 'name'],
+								'Accotink Creek', '#f59e0b',           // Darker Amber/Orange
+								'Fourmile Run-Potomac River', '#8b5cf6', // Darker Purple
+								'Cameron Run', '#3b82f6',               // Darker Blue
+								'Pohick Creek', '#10b981',              // Darker Green
+								'#f59e0b' // fallback
+							],
+							'line-width': [
+								'interpolate',
+								['linear'],
+								['zoom'],
+								8, 1.5,
+								14, 2.5,
+								17, 3.5
+							],
+							'line-opacity': 0.8
+						}
+					},
+					{
+						id: 'huc12-labels',
+						type: 'symbol',
+						source: 'huc12',
+						'source-layer': 'huc12',
+						minzoom: 11,
+						layout: {
+							visibility: 'none',
+							'text-field': ['get', 'name'],
+							'text-font': ['Noto Sans Regular'],
+							'text-size': [
+								'interpolate',
+								['linear'],
+								['zoom'],
+								11, 13,
+								14, 16,
+								17, 20
+							],
+							'text-allow-overlap': true
+						},
+						paint: {
+							'text-color': [
+								'match',
+								['get', 'name'],
+								'Accotink Creek', '#b45309',
+								'Fourmile Run-Potomac River', '#6d28d9',
+								'Cameron Run', '#1e40af',
+								'Pohick Creek', '#047857',
+								'#1f2937'
+							],
+							'text-halo-color': '#ffffff',
+							'text-halo-width': 2.5
+						}
+					}
+				);
+			} else {
+				// Standard layer from configuration
+				const mapLayer: any = {
+					id: layer.id,
+					type: layer.type === 'raster' ? 'raster' : 'line', // default to line for vectors
+					source: layer.id,
+					layout: {
+						visibility: layer.defaultVisible ? 'visible' : 'none'
+					}
+				};
+
+				// Add source-layer for vector layers
+				if (layer.type === 'vector' && layer.vectorLayerId) {
+					mapLayer['source-layer'] = layer.vectorLayerId;
+				}
+
+				// Add paint properties
+				if (layer.paintProperties) {
+					mapLayer.paint = layer.paintProperties;
+				} else if (layer.type === 'raster') {
+					mapLayer.paint = { 'raster-opacity': layer.defaultOpacity };
+				}
+
+				configuredLayers.push(mapLayer);
+			}
+		}
+
+		return configuredLayers;
+	}
+
 	function createMapStyle(): StyleSpecification {
     // Note: Layer visibility is handled by applyLayerState() reacting to the store.
     // Initialize layer visibilities to match store defaults to avoid flash of content.
 
+		// Build sources from LAYER_SOURCES configuration
+		const sources: any = {
+			// Color basemap (CARTO Voyager - colorful and clear)
+			'base-map': {
+				type: 'raster',
+				tiles: [
+					'https://tile.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}.png'
+				],
+				tileSize: 256,
+				attribution: '© OpenStreetMap contributors, © CARTO'
+			},
+			// Dynamic overlay sources (unchanged)
+			watersheds: {
+				type: 'geojson',
+				data: {
+					type: 'FeatureCollection',
+					features: []
+				}
+			},
+			'cross-section-line': {
+				type: 'geojson',
+				data: {
+					type: 'FeatureCollection',
+					features: []
+				}
+			},
+			'watershed-outlets': {
+				type: 'geojson',
+				data: {
+					type: 'FeatureCollection',
+					features: []
+				}
+			}
+		};
+
+		// Add layer sources from configuration
+		for (const layer of LAYER_SOURCES) {
+			sources[layer.id] = {
+				type: layer.type,
+				url: buildPmtilesUrl(layer.filename),
+				...(layer.type === 'raster' ? { tileSize: 256 } : {})
+			};
+		}
+
 		return {
 			version: 8 as 8,
 			glyphs: 'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-			sources: {
-				'base-map-osm': {
-					type: 'raster',
-					tiles: [
-						'https://tile.openstreetmap.org/{z}/{x}/{y}.png'
-					],
-					tileSize: 256,
-					attribution: '© OpenStreetMap contributors'
-				},
-				'base-map-light': {
-					type: 'raster',
-					tiles: [
-						'https://tile.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png'
-					],
-					tileSize: 256,
-					attribution: '© OpenStreetMap contributors, © CARTO'
-				},
-				'base-none': {
-					type: 'geojson',
-					data: {
-						type: 'FeatureCollection',
-						features: []
-					}
-				},
-			hillshade: {
-				type: 'raster',
-				url: buildPmtilesUrl('hillshade.pmtiles'),
-				tileSize: 256
-			},
-			slope: {
-				type: 'raster',
-				url: buildPmtilesUrl('slope.pmtiles'),
-				tileSize: 256
-			},
-			aspect: {
-				type: 'raster',
-				url: buildPmtilesUrl('aspect.pmtiles'),
-				tileSize: 256
-			},
-			'streams-nhd': {
-				type: 'vector',
-				url: buildPmtilesUrl('streams_nhd.pmtiles')
-			},
-			'streams-dem': {
-				type: 'vector',
-				url: buildPmtilesUrl('streams_dem.pmtiles')
-			},
-			// geology: {  // No geology data available
-			// 	type: 'vector',
-			// 	url: buildPmtilesUrl('geology.pmtiles')
-			// },
-				watersheds: {
-					type: 'geojson',
-					data: {
-						type: 'FeatureCollection',
-						features: []
-					}
-				},
-				'cross-section-line': {
-					type: 'geojson',
-					data: {
-						type: 'FeatureCollection',
-						features: []
-					}
-				},
-				'watershed-outlets': {
-					type: 'geojson',
-					data: {
-						type: 'FeatureCollection',
-						features: []
-					}
-				},
-			contours: {
-				type: 'vector',
-				url: buildPmtilesUrl('contours.pmtiles')
-			},
-			huc12: {
-				type: 'vector',
-				url: buildPmtilesUrl('huc12.pmtiles')
-			}
-		},
+			sources,
 			layers: [
+				// Color basemap layer (always visible)
 				{
-					id: 'base-osm',
+					id: 'basemap',
 					type: 'raster',
-					source: 'base-map-osm',
+					source: 'base-map',
 					layout: { visibility: 'visible' }
 				},
-				{
-					id: 'base-light',
-					type: 'raster',
-					source: 'base-map-light',
-					layout: { visibility: 'none' }
-				},
-				{
-					id: 'base-none',
-					type: 'background',
-					layout: { visibility: 'none' },
-					paint: { 'background-color': '#f8f8f8' }
-				},
-                {
-                    id: 'slope',
-                    type: 'raster',
-                    source: 'slope',
-                    layout: { visibility: 'none' }, // default off per store
-                    paint: { 'raster-opacity': 0.7 }
-                },
-                {
-                    id: 'aspect',
-                    type: 'raster',
-                    source: 'aspect',
-                    layout: { visibility: 'none' }, // default off per store
-                    paint: { 'raster-opacity': 0.7 }
-                },
-				{
-					id: 'hillshade',
-					type: 'raster',
-					source: 'hillshade',
-					layout: { visibility: 'none' }, // default off per store - renders on top of slope/aspect
-					paint: { 'raster-opacity': 0.6 }
-				},
-// 				{ No geology data available
-					// id: 'geology',
-					// type: 'fill',
-					// source: 'geology',
-					// 'source-layer': 'geology',
-					// layout: { visibility: 'none' },
-					// paint: {
-						// 'fill-color': ['get', 'color'],
-						// 'fill-opacity': 0.6
-					// }
-				// },
-				// {
-					// id: 'geology-outline',
-					// type: 'line',
-					// source: 'geology',
-					// 'source-layer': 'geology',
-					// layout: { visibility: 'none' },
-					// paint: {
-						// 'line-color': '#333',
-						// 'line-width': 1
-					// }
-				// },
-				{
-					id: 'streams-nhd',
-					type: 'line',
-					source: 'streams-nhd',
-					'source-layer': 'streams_nhd',
-					layout: { visibility: 'visible' },
-					paint: {
-						// Solid blue for real streams
-						'line-color': '#1e3a8a',  // Dark blue
-						// Width by stream order
-						'line-width': [
-							'interpolate',
-							['linear'],
-							['zoom'],
-							8, 1.0,
-							14, 2.5,
-							17, 4.0
-						],
-						'line-opacity': 1.0
-					}
-				},
-				{
-					id: 'streams-dem',
-					type: 'line',
-					source: 'streams-dem',
-					'source-layer': 'streams',  // Layer name from DEM processing
-					layout: { visibility: 'none' },  // Hidden by default per stores.ts
-					paint: {
-						// Darker blue gradient for drainage network
-						'line-color': [
-							'interpolate',
-							['linear'],
-							['coalesce', ['get', 'drainage_area_sqkm'], 0],
-							0, '#2563eb',      // Very small: medium-dark blue
-							1, '#1e40af',      // Small: dark blue
-							5, '#1e3a8a',      // Medium: darker blue
-							15, '#172554',     // Large: very dark blue
-							50, '#0f172a'      // Very large: almost navy
-						],
-						// Thinner lines for drainage network
-						'line-width': [
-							'interpolate',
-							['linear'],
-							['zoom'],
-							8, [
-								'match',
-								['coalesce', ['get', 'order'], 1],
-								1, 0.3,
-								2, 0.5,
-								3, 0.8,
-								0.3 // fallback
-							],
-							14, [
-								'match',
-								['coalesce', ['get', 'order'], 1],
-								1, 0.8,
-								2, 1.5,
-								3, 2.0,
-								0.8 // fallback
-							],
-							17, [
-								'match',
-								['coalesce', ['get', 'order'], 1],
-								1, 1.5,
-								2, 2.5,
-								3, 3.5,
-								1.5 // fallback
-							]
-						],
-						'line-opacity': 0.7
-					}
-				},
-				{
-					id: 'huc12-fill',
-					type: 'fill',
-					source: 'huc12',
-					'source-layer': 'huc12',
-					layout: { visibility: 'none' },
-					paint: {
-						'fill-color': [
-							'match',
-							['get', 'name'],
-							'Accotink Creek', '#fbbf24',           // Amber/Yellow
-							'Fourmile Run-Potomac River', '#a78bfa', // Purple
-							'Cameron Run', '#60a5fa',               // Blue
-							'Pohick Creek', '#34d399',              // Green
-							'#fbbf24' // fallback
-						],
-						'fill-opacity': 0.2
-					}
-				},
-				{
-					id: 'huc12-outline',
-					type: 'line',
-					source: 'huc12',
-					'source-layer': 'huc12',
-					layout: { visibility: 'none' },
-					paint: {
-						'line-color': [
-							'match',
-							['get', 'name'],
-							'Accotink Creek', '#f59e0b',           // Darker Amber/Orange
-							'Fourmile Run-Potomac River', '#8b5cf6', // Darker Purple
-							'Cameron Run', '#3b82f6',               // Darker Blue
-							'Pohick Creek', '#10b981',              // Darker Green
-							'#f59e0b' // fallback
-						],
-						'line-width': [
-							'interpolate',
-							['linear'],
-							['zoom'],
-							8, 1.5,
-							14, 2.5,
-							17, 3.5
-						],
-						'line-opacity': 0.8
-					}
-				},
-				{
-					id: 'huc12-labels',
-					type: 'symbol',
-					source: 'huc12',
-					'source-layer': 'huc12',
-					minzoom: 11,
-					layout: {
-						visibility: 'none',
-						'text-field': ['get', 'name'],
-						'text-font': ['Noto Sans Regular'],
-						'text-size': [
-							'interpolate',
-							['linear'],
-							['zoom'],
-							11, 13,
-							14, 16,
-							17, 20
-						],
-						'text-allow-overlap': true
-					},
-					paint: {
-						'text-color': [
-							'match',
-							['get', 'name'],
-							'Accotink Creek', '#b45309',
-							'Fourmile Run-Potomac River', '#6d28d9',
-							'Cameron Run', '#1e40af',
-							'Pohick Creek', '#047857',
-							'#1f2937'
-						],
-						'text-halo-color': '#ffffff',
-						'text-halo-width': 2.5
-					}
-				},
+				// Data layers from configuration
+				...buildLayersFromConfig(),
+				// Dynamic overlay layers (unchanged)
 				{
 					id: 'watersheds-fill',
 					type: 'fill',
@@ -662,25 +524,6 @@ function headerToBounds(header: any): TileHeaderBounds {
 					}
 				},
 				{
-					id: 'contours',
-					type: 'line',
-					source: 'contours',
-					'source-layer': 'contours',
-					layout: { visibility: 'visible' },
-			paint: {
-				'line-color': '#1f2937',
-				'line-width': [
-					'interpolate',
-					['linear'],
-					['zoom'],
-					8, 0.6,
-					14, 1.1,
-					17, 1.6
-				],
-				'line-opacity': 0.75
-			}
-		},
-				{
 					id: 'cross-section-line',
 					type: 'line',
 					source: 'cross-section-line',
@@ -707,10 +550,10 @@ function headerToBounds(header: any): TileHeaderBounds {
 
 	// Safe layer applier with retries
 	function applyLayerState(layersState: any, retryCount = 0) {
-		console.log('[applyLayerState] Called with state:', layersState);
+		logger.log('[applyLayerState] Called with state:', layersState);
 
 		if (!map) {
-			console.warn('[applyLayerState] Map instance not available');
+			logger.warn('[applyLayerState] Map instance not available');
 			return;
 		}
 
@@ -725,13 +568,13 @@ function headerToBounds(header: any): TileHeaderBounds {
 			const layer = map.getLayer(layerId);
 			if (layer) {
 				const newVisibility = config.visible ? 'visible' : 'none';
-				console.log(`[applyLayerState] Setting ${layerId} visibility to ${newVisibility}`);
+				logger.log(`[applyLayerState] Setting ${layerId} visibility to ${newVisibility}`);
 
 				try {
 					// Update opacity for raster layers first to ensure immediate visual change
 					if (layer.type === 'raster') {
 						const targetOpacity = config.visible ? (config.opacity ?? 1.0) : 0;
-						console.log(`[applyLayerState] Setting ${layerId} opacity to ${targetOpacity}`);
+						logger.log(`[applyLayerState] Setting ${layerId} opacity to ${targetOpacity}`);
 						map.setPaintProperty(layerId, 'raster-opacity', targetOpacity);
 					}
 
@@ -743,29 +586,29 @@ function headerToBounds(header: any): TileHeaderBounds {
 						const huc12Labels = map.getLayer('huc12-labels');
 
 						if (huc12Fill) {
-							console.log(`[applyLayerState] Syncing huc12-fill visibility to ${newVisibility}`);
+							logger.log(`[applyLayerState] Syncing huc12-fill visibility to ${newVisibility}`);
 							map.setLayoutProperty('huc12-fill', 'visibility', newVisibility);
 						}
 						if (huc12Labels) {
-							console.log(`[applyLayerState] Syncing huc12-labels visibility to ${newVisibility}`);
+							logger.log(`[applyLayerState] Syncing huc12-labels visibility to ${newVisibility}`);
 							map.setLayoutProperty('huc12-labels', 'visibility', newVisibility);
 						}
 					}
 
 
 				} catch (error) {
-					console.error(`[applyLayerState] Error updating layer ${layerId}:`, error);
+					logger.error(`[applyLayerState] Error updating layer ${layerId}:`, error);
 				}
 			} else {
 				// Layer not yet available, track for retry
-				console.log(`[applyLayerState] Layer ${layerId} not found, will retry`);
+				logger.log(`[applyLayerState] Layer ${layerId} not found, will retry`);
 				pendingLayers.push(layerId);
 			}
 		});
 
 		// Retry for layers that don't exist yet (up to 30 attempts = 3 seconds)
 		if (pendingLayers.length > 0 && retryCount < 30) {
-			console.log(`[applyLayerState] Retrying ${pendingLayers.length} layers in 100ms (attempt ${retryCount + 1}/30)`);
+			logger.log(`[applyLayerState] Retrying ${pendingLayers.length} layers in 100ms (attempt ${retryCount + 1}/30)`);
 			setTimeout(() => {
 				// Only retry the pending layers
 				const pendingState: any = {};
@@ -775,7 +618,7 @@ function headerToBounds(header: any): TileHeaderBounds {
 				applyLayerState(pendingState, retryCount + 1);
 			}, 100);
 		} else if (pendingLayers.length > 0) {
-			console.warn(`[applyLayerState] Gave up on layers after 30 attempts:`, pendingLayers);
+			logger.warn(`[applyLayerState] Gave up on layers after 30 attempts:`, pendingLayers);
 		}
 	}
 
@@ -808,19 +651,6 @@ function updateOutletLayer(outlets: any[]) {
 	});
 }
 
-function updateBasemap(style: 'osm' | 'light' | 'none') {
-	if (!mapReady || !map) return;
-
-	if (map.getLayer('base-osm')) {
-		map.setLayoutProperty('base-osm', 'visibility', style === 'osm' ? 'visible' : 'none');
-	}
-	if (map.getLayer('base-light')) {
-		map.setLayoutProperty('base-light', 'visibility', style === 'light' ? 'visible' : 'none');
-	}
-	if (map.getLayer('base-none')) {
-		map.setLayoutProperty('base-none', 'visibility', style === 'none' ? 'visible' : 'none');
-	}
-}
 
 async function initializeTileStatus() {
 	if (tileStatusInitialized || typeof window === 'undefined') {
@@ -865,16 +695,16 @@ async function initializeTileStatus() {
 						const expectedLayer = src.id; // Expected source-layer name
 
 						if (!layerNames.includes(expectedLayer)) {
-							console.warn(`[PMTiles] Vector layer mismatch for ${src.id}.pmtiles:
+							logger.warn(`[PMTiles] Vector layer mismatch for ${src.id}.pmtiles:
 								Expected source-layer: "${expectedLayer}"
 								Available layers: ${layerNames.join(', ')}
 								Update your style's source-layer references to match.`);
 						} else {
-							console.log(`[PMTiles] Vector layer verified for ${src.id}: "${expectedLayer}" found`);
+							logger.log(`[PMTiles] Vector layer verified for ${src.id}: "${expectedLayer}" found`);
 						}
 					}
 				} catch (metaError) {
-					console.log(`[PMTiles] Could not verify vector layers for ${src.id}:`, metaError);
+					logger.log(`[PMTiles] Could not verify vector layers for ${src.id}:`, metaError);
 				}
 			}
 		} catch (error) {
@@ -1040,22 +870,12 @@ function updateCrossSectionLayer(points: [number, number][]) {
 export async function delineateWatershed(lngLat: { lng: number; lat: number }) {
 	try {
 		const settings = get(delineationSettings);
-		const response = await fetch('/api/delineate', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				lat: lngLat.lat,
-				lon: lngLat.lng,
-				snap_to_stream: settings.snapToStream,
-				snap_radius: settings.snapRadius
-			})
+		const result = await apiPost('/api/delineate', {
+			lat: lngLat.lat,
+			lon: lngLat.lng,
+			snap_to_stream: settings.snapToStream,
+			snap_radius: settings.snapRadius
 		});
-
-			if (!response.ok) {
-				throw new Error('Delineation failed');
-			}
-
-		const result = await response.json();
 
 		// Add watershed to map
 		const nextWatersheds = [...get(watersheds), result.watershed];
@@ -1090,7 +910,7 @@ export async function delineateWatershed(lngLat: { lng: number; lat: number }) {
 
 			return result;
 		} catch (error) {
-			console.error('Watershed delineation error:', error);
+			logger.error('Watershed delineation error:', error);
 			alert('Failed to delineate watershed. Check backend is running and data is prepared.');
 		}
 	}

@@ -1,5 +1,6 @@
 import { writable } from 'svelte/store';
 import { getItem, setItem } from '$lib/utils/localStorage';
+import { getInitialLayerState } from '$lib/config/layers';
 
 export interface LayerConfig {
 	visible: boolean;
@@ -46,19 +47,19 @@ function createPersistedStore<T>(key: string, defaultValue: T) {
 	return store;
 }
 
-// Layer visibility and opacity
-export const layers = writable<LayersState>({
-	hillshade: { visible: false, opacity: 0.6 },
-	slope: { visible: false, opacity: 0.7 },
-	aspect: { visible: false, opacity: 0.7 },
-	'streams-nhd': { visible: true, opacity: 1.0 },  // Real streams from NHD
-	'streams-dem': { visible: false, opacity: 0.7 },  // DEM-derived drainage network
-	// geology: { visible: false, opacity: 0.7 },  // No geology data available
-	contours: { visible: false, opacity: 0.8 },
-	'huc12-fill': { visible: false, opacity: 1.0 },
-	'huc12-outline': { visible: false, opacity: 1.0 },
-	'huc12-labels': { visible: false, opacity: 1.0 },
-});
+// Layer visibility and opacity - using centralized configuration
+const initialLayerState = getInitialLayerState();
+
+// Add the special HUC12 sub-layers (fill, outline, labels) that are managed separately
+// These inherit visibility from the main huc12 layer
+const layersWithHuc12Sublayers = {
+	...initialLayerState,
+	'huc12-fill': { visible: initialLayerState.huc12?.visible ?? false, opacity: 1.0 },
+	'huc12-outline': { visible: initialLayerState.huc12?.visible ?? false, opacity: 1.0 },
+	'huc12-labels': { visible: initialLayerState.huc12?.visible ?? false, opacity: 1.0 },
+};
+
+export const layers = writable<LayersState>(layersWithHuc12Sublayers);
 
 // Active tool
 export const activeTool = writable<Tool>('none');
@@ -88,10 +89,6 @@ export const delineationSettings = writable<DelineationSettings>({
 	snapToStream: true,
 	snapRadius: 100
 });
-
-// Basemap style selection
-export type BasemapStyle = 'osm' | 'light' | 'none';
-export const basemapStyle = writable<BasemapStyle>('osm');
 
 export interface TileStatusItem {
 	id: string;
