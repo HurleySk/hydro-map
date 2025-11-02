@@ -1,6 +1,6 @@
 # Data Preparation Guide
 
-**Version**: 1.2.1
+**Version**: 1.3.0
 
 This guide walks you through preparing data for the Hydro-Map application, including DEM processing, stream extraction (both DEM-derived and NHD-based), HUC12 watershed boundaries, and tile generation.
 

@@ -92,7 +92,7 @@ export const LAYER_SOURCES: LayerSource[] = [
     label: 'Real Streams',
     filename: 'streams_nhd.pmtiles',
     type: 'vector',
-    vectorLayerId: 'streams_nhd', // Actual layer name in PMTiles
+    vectorLayerId: 'streams_nhd', // Actual layer name in PMTiles (with underscore)
     defaultVisible: true,
     defaultOpacity: 1.0,
     category: 'hydrology',
@@ -196,6 +196,49 @@ export const LAYER_SOURCES: LayerSource[] = [
       // For outline layer (separate)
       'line-color': '#374151',
       'line-width': 1,
+      'line-opacity': 0.8
+    }
+  },
+  {
+    id: 'geology',
+    label: 'Geology',
+    filename: 'geology.pmtiles',
+    type: 'vector',
+    vectorLayerId: 'geology',
+    defaultVisible: false,  // Set to false by default
+    defaultOpacity: 0.6,
+    category: 'reference',
+    description: 'Geological formations and rock types',
+    paintProperties: {
+      // For fill layer
+      'fill-color': [
+        'coalesce',
+        ['get', 'color'],
+        ['match',
+          ['downcase', ['coalesce', ['get', 'rock_type'], ['get', 'unit'], '']],
+          'igneous', '#f59e0b',
+          'sedimentary', '#22c55e',
+          'metamorphic', '#8b5cf6',
+          'volcanic', '#ef4444',
+          'plutonic', '#f97316',
+          'carbonate', '#06b6d4',
+          'sandstone', '#fbbf24',
+          'shale', '#84cc16',
+          'limestone', '#10b981',
+          'granite', '#f87171',
+          'basalt', '#991b1b',
+          'gneiss', '#a78bfa',
+          'schist', '#c084fc',
+          'quartzite', '#e0e7ff',
+          'unconsolidated', '#d4d4d8',
+          'alluvium', '#fef3c7',
+          '#9ca3af'  // fallback gray
+        ]
+      ],
+      'fill-opacity': 0.6,
+      // For outline layer (separate)
+      'line-color': '#4b5563',
+      'line-width': 0.5,
       'line-opacity': 0.8
     }
   }

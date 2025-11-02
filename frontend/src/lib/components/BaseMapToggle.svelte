@@ -3,9 +3,9 @@
 	import type { BasemapStyle } from '$lib/stores';
 
 	const options: { value: BasemapStyle; label: string }[] = [
-		{ value: 'osm', label: 'Color' },
-		{ value: 'light', label: 'Light Gray' },
-		{ value: 'none', label: 'None' }
+		{ value: 'vector', label: 'Detailed' },
+		{ value: 'light', label: 'Minimal' },
+		{ value: 'none', label: 'Data Only' }
 	];
 
 	$: current = $basemapStyle;

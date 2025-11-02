@@ -3,12 +3,38 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Dict
 import geopandas as gpd
 from shapely.geometry import Point
+from shapely.ops import nearest_points
 from pathlib import Path
+import math
 
 from app.config import settings
 
 
 router = APIRouter()
+
+
+def calculate_distance_meters(point1: Point, point2: Point) -> float:
+    """
+    Calculate distance between two WGS84 points in meters using Haversine formula.
+
+    Args:
+        point1: First point (lon, lat)
+        point2: Second point (lon, lat)
+
+    Returns:
+        Distance in meters
+    """
+    R = 6371000  # Earth radius in meters
+
+    lat1 = math.radians(point1.y)
+    lat2 = math.radians(point2.y)
+    dlat = math.radians(point2.y - point1.y)
+    dlon = math.radians(point2.x - point1.x)
+
+    a = math.sin(dlat/2)**2 + math.cos(lat1) * math.cos(lat2) * math.sin(dlon/2)**2
+    c = 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+    return R * c
 
 
 class FeatureInfoRequest(BaseModel):
@@ -93,9 +119,14 @@ async def query_streams(point: Point, buffer_m: float) -> Optional[List[Dict]]:
         if len(intersecting) == 0:
             return None
 
-        # Extract attributes
+        # Extract attributes and calculate distances
         features = []
         for idx, row in intersecting.iterrows():
+            # Calculate distance to the nearest point on the stream
+            stream_geom = row.geometry
+            nearest_pt_on_stream, _ = nearest_points(stream_geom, point)
+            distance = calculate_distance_meters(point, nearest_pt_on_stream)
+
             feature = {
                 "type": "stream",
                 "name": row.get('name', row.get('GNIS_NAME', 'Unnamed')),
@@ -110,8 +141,16 @@ async def query_streams(point: Point, buffer_m: float) -> Optional[List[Dict]]:
                 "stream_type": str(row['stream_type']) if 'stream_type' in row and row['stream_type'] is not None else None,
                 # Keep legacy 'order' field for compatibility
                 "order": int(row.get('stream_order', row.get('StreamOrde', row.get('order', 0)))),
+                # Add distance
+                "distance_meters": round(distance, 1)
             }
             features.append(feature)
+
+        # Sort by distance, closest first
+        features.sort(key=lambda x: x['distance_meters'])
+
+        # Limit to top 3 closest features
+        features = features[:3] if len(features) > 3 else features
 
         return features if features else None
 
@@ -143,19 +182,92 @@ async def query_geology(point: Point, buffer_m: float) -> Optional[List[Dict]]:
         if geology_gdf.crs != "EPSG:4326":
             geology_gdf = geology_gdf.to_crs("EPSG:4326")
 
-        # Find containing polygon
+        features = []
+
+        # FIRST: Find all polygons that CONTAIN the click point
         containing = geology_gdf[geology_gdf.contains(point)]
 
-        features = []
-        for idx, row in containing.iterrows():
-            feature = {
-                "type": "geology",
-                "formation": str(row.get('UNIT_NAME', row.get('name', 'Unknown'))),
-                "rock_type": str(row.get('ROCKTYPE1', row.get('type', 'Unknown'))),
-                "age": str(row.get('MIN_AGE', row.get('age', 'Unknown'))),
-                "description": str(row.get('UNIT_DESCR', row.get('description', ''))),
-            }
-            features.append(feature)
+        if len(containing) > 0:
+            # If multiple polygons contain the point, calculate their areas and prefer the smallest
+            containing_proj = containing.to_crs("EPSG:6933")  # Equal Earth for area calculation
+            containing_areas = containing_proj.area
+
+            for idx, row in containing.iterrows():
+                area_sqm = containing_areas.loc[idx]
+
+                # Use our normalized field names from prepare_geology.py
+                rock_type = str(row.get('rock_type', row.get('ROCKTYPE1', row.get('GENERALIZE', 'Unknown'))))
+                description = str(row.get('description', row.get('UNIT_DESCR', row.get('GENERALIZE', ''))))
+
+                # Don't include description if it's the same as rock_type
+                if description == rock_type:
+                    description = ''
+
+                feature = {
+                    "type": "geology",
+                    "formation": str(row.get('unit', row.get('UNIT_NAME', row.get('ORIG_LABEL', 'Unknown')))),
+                    "rock_type": rock_type,
+                    "age": str(row.get('age', row.get('MIN_AGE', row.get('AGE', 'Unknown')))),
+                    "description": description,
+                    "distance_meters": 0.0,
+                    "_area_sqm": area_sqm  # Internal use for sorting
+                }
+                features.append(feature)
+
+            # Sort by area (smallest first) - prefer smaller, more specific polygons
+            features.sort(key=lambda x: x['_area_sqm'])
+
+            # Remove internal area field and limit to top feature
+            for f in features:
+                del f['_area_sqm']
+            features = features[:1]  # Only return the smallest containing polygon
+
+        else:
+            # SECOND: If no polygon contains the point, find nearby polygons within buffer
+            # Create buffer in degrees (approximate)
+            # 1 degree latitude ≈ 111 km
+            # 1 degree longitude ≈ 111 km * cos(latitude)
+            import math
+            lat_deg_per_m = 1 / 111000
+            lon_deg_per_m = 1 / (111000 * math.cos(math.radians(point.y)))
+            buffer_deg = max(buffer_m * lat_deg_per_m, buffer_m * lon_deg_per_m)
+
+            # Create buffered point for intersection testing
+            buffered_point = point.buffer(buffer_deg)
+
+            # Find intersecting polygons
+            intersecting = geology_gdf[geology_gdf.intersects(buffered_point)]
+
+            for idx, row in intersecting.iterrows():
+                polygon_geom = row.geometry
+
+                # Calculate distance to boundary
+                nearest_pt_on_boundary, _ = nearest_points(polygon_geom.boundary, point)
+                distance = calculate_distance_meters(point, nearest_pt_on_boundary)
+
+                # Use our normalized field names from prepare_geology.py
+                rock_type = str(row.get('rock_type', row.get('ROCKTYPE1', row.get('GENERALIZE', 'Unknown'))))
+                description = str(row.get('description', row.get('UNIT_DESCR', row.get('GENERALIZE', ''))))
+
+                # Don't include description if it's the same as rock_type
+                if description == rock_type:
+                    description = ''
+
+                feature = {
+                    "type": "geology",
+                    "formation": str(row.get('unit', row.get('UNIT_NAME', row.get('ORIG_LABEL', 'Unknown')))),
+                    "rock_type": rock_type,
+                    "age": str(row.get('age', row.get('MIN_AGE', row.get('AGE', 'Unknown')))),
+                    "description": description,
+                    "distance_meters": round(distance, 1)
+                }
+                features.append(feature)
+
+            # Sort by distance, closest first
+            features.sort(key=lambda x: x['distance_meters'])
+
+            # Limit to top 3 closest features
+            features = features[:3] if len(features) > 3 else features
 
         return features if features else None
 

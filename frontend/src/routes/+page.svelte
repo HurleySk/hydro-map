@@ -2,6 +2,7 @@
 	import Map from '$lib/components/Map.svelte';
 	import LayerPanel from '$lib/components/LayerPanel.svelte';
 	import LocationSearch from '$lib/components/LocationSearch.svelte';
+	import BaseMapToggle from '$lib/components/BaseMapToggle.svelte';
 import WatershedTool from '$lib/components/WatershedTool.svelte';
 import CrossSectionTool from '$lib/components/CrossSectionTool.svelte';
 import FeatureInfo from '$lib/components/FeatureInfo.svelte';
@@ -9,6 +10,7 @@ import FeatureInfoTool from '$lib/components/FeatureInfoTool.svelte';
 import TileStatusPanel from '$lib/components/TileStatusPanel.svelte';
 import CollapsiblePanel from '$lib/components/CollapsiblePanel.svelte';
 import Legend from '$lib/components/Legend.svelte';
+import GeologyLegend from '$lib/components/GeologyLegend.svelte';
 	import { activeTool, panelStates, layers } from '$lib/stores';
 
 	let mapComponent: any;
@@ -52,6 +54,8 @@ import Legend from '$lib/components/Legend.svelte';
 
 		<aside class="controls">
 			<LocationSearch on:select={handleLocationSelect} />
+
+			<BaseMapToggle />
 
 			<CollapsiblePanel
 				title="Map Layers"
@@ -97,6 +101,10 @@ import Legend from '$lib/components/Legend.svelte';
 
 		{#if $layers['flow-accum']?.visible}
 			<Legend opacity={$layers['flow-accum'].opacity} />
+		{/if}
+
+		{#if $layers['geology']?.visible}
+			<GeologyLegend opacity={$layers['geology'].opacity} />
 		{/if}
 	</main>
 </div>

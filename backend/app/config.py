@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     DEM_PATH: str = "../data/processed/dem/filled_dem.tif"
     FLOW_DIR_PATH: str = "../data/processed/dem/flow_direction.tif"
     FLOW_ACC_PATH: str = "../data/processed/dem/flow_accumulation.tif"
-    STREAMS_PATH: str = "../data/processed/streams.gpkg"
+    STREAMS_PATH: str = "../data/processed/streams_nhd.gpkg"
     GEOLOGY_PATH: str = "../data/processed/geology.gpkg"
 
     # Watershed delineation settings

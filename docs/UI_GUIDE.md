@@ -1,6 +1,6 @@
 # User Interface Guide
 
-**Version**: 1.2.1
+**Version**: 1.3.0
 
 ## Overview
 
@@ -83,6 +83,12 @@ Layers are organized into collapsible groups:
 - **Contours**: Elevation contour lines (10m interval)
 - **HUC12 Watersheds**: USGS watershed boundary reference layer with labels
 
+#### **Reference** (1 layer)
+- **Geology**: Geological formations with distinct patterns (if data available)
+  - Colored by rock type (igneous, sedimentary, metamorphic, volcanic, etc.)
+  - Texture patterns for colorblind accessibility
+  - Seven distinct patterns: horizontal lines, diagonal, crosshatch, waves, dots, vertical lines, sparse dots
+
 ### Layer Controls
 
 #### Visibility Toggle
@@ -141,29 +147,38 @@ Click the group header (e.g., "Terrain") to expand or collapse that section:
 
 ## Basemap Toggle
 
-Control the underlying reference map.
+Control the underlying reference map with feature-rich vector basemaps from Stadia Maps.
 
 ### Location
 
-Left sidebar, below Layer Panel
+Left sidebar, near top of controls
 
 ### Options
 
-- **Color**: OpenStreetMap standard color basemap (streets, labels, features)
-- **Light Gray**: Muted gray basemap (minimal distraction, emphasis on data layers)
-- **None**: No basemap (only show your data layers)
+- **Detailed**: High-detail vector basemap with rich POI display (parks, schools, buildings, land use, roads)
+- **Minimal**: Clean, minimal style with reduced visual clutter (streets and basic labels only)
+- **Data Only**: No basemap (only show your hydrological data layers)
 
 ### Default
 
-**Color** basemap is selected by default.
+**Detailed** basemap is selected by default.
 
 ### Use Cases
 
-- **Color**: General navigation, urban context, finding locations
-- **Light Gray**: Focus on data layers with minimal background clutter
-- **None**: Maximum emphasis on terrain/hydrology layers only
+- **Detailed**: General navigation, understanding land use context, identifying features (schools, parks, buildings)
+- **Minimal**: Balanced view with subtle basemap and emphasis on data layers
+- **Data Only**: Maximum emphasis on terrain/hydrology layers only
 
-**Tip**: Use "Light Gray" or "None" when working with hillshade layer to avoid visual conflict.
+### Configuration
+
+Basemaps require a Stadia Maps API key configured in `.env`:
+```bash
+VITE_STADIA_API_KEY=your_api_key_here
+```
+
+**Free tier**: 20,000 map views/month. Sign up at https://client.stadiamaps.com/signup/
+
+**Tip**: Use "Data Only" mode if no API key is configured, or when working with hillshade layer to avoid visual conflict.
 
 ---
 

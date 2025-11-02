@@ -122,9 +122,16 @@ export const panelStates = createPersistedStore<PanelStates>('panel-states', {
 export interface LayerGroupStates {
 	terrain: boolean;
 	hydrology: boolean;
+	reference: boolean;
 }
 
 export const layerGroupStates = createPersistedStore<LayerGroupStates>('layer-group-states', {
 	terrain: false,    // Collapsed by default
-	hydrology: true    // Expanded by default
+	hydrology: true,   // Expanded by default
+	reference: true    // Expanded to show geology controls
 });
+
+// Basemap style selection
+export type BasemapStyle = 'vector' | 'light' | 'none';
+
+export const basemapStyle = createPersistedStore<BasemapStyle>('basemap-style', 'vector');

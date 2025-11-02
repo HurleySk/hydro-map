@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-**Version**: 1.2.1
+**Version**: 1.3.0
 
 Get Hydro-Map running in minutes.
 
@@ -51,7 +51,22 @@ cd ..
 
 # Create .env file
 cp .env.example .env
-# Edit .env to configure paths if needed
+# Edit .env to add Stadia Maps API key and configure paths
+```
+
+### Configure Basemap API Key
+
+Get a free Stadia Maps API key for feature-rich basemaps:
+
+1. Sign up at https://client.stadiamaps.com/signup/ (free tier: 20k views/month)
+2. Create an API key
+3. Add to `.env`:
+   ```bash
+   VITE_STADIA_API_KEY=your_api_key_here
+   ```
+
+**Optional**: The app works without an API key by using "Data Only" basemap mode.
+
 ```
 
 ## Get Sample Data

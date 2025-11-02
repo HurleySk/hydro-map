@@ -465,19 +465,6 @@ function headerToBounds(header: any): TileHeaderBounds {
 							'fill-color': layer.paintProperties?.['fill-color'] || '#9ca3af',
 							'fill-opacity': layer.paintProperties?.['fill-opacity'] || 0.6
 ,
-							'fill-pattern': [
-								'match',
-								['get', 'rock_type'],
-								'Metamorphic, schist', 'pattern-metamorphic-schist',
-								'Metamorphic, sedimentary clastic', 'pattern-metamorphic-sedimentary-clastic',
-								'Metamorphic, undifferentiated', 'pattern-metamorphic-undifferentiated',
-								'Metamorphic, volcanic', 'pattern-metamorphic-volcanic',
-								'Melange', 'pattern-melange',
-								'Igneous, intrusive', 'pattern-igneous-intrusive',
-								'Unconsolidated, undifferentiated', 'pattern-unconsolidated-undifferentiated',
-								'Water', 'pattern-water',
-								'pattern-other'  // fallback
-							]
 						}
 					},
 					{

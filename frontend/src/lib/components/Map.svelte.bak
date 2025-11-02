@@ -464,20 +464,6 @@ function headerToBounds(header: any): TileHeaderBounds {
 						paint: {
 							'fill-color': layer.paintProperties?.['fill-color'] || '#9ca3af',
 							'fill-opacity': layer.paintProperties?.['fill-opacity'] || 0.6
-,
-							'fill-pattern': [
-								'match',
-								['get', 'rock_type'],
-								'Metamorphic, schist', 'pattern-metamorphic-schist',
-								'Metamorphic, sedimentary clastic', 'pattern-metamorphic-sedimentary-clastic',
-								'Metamorphic, undifferentiated', 'pattern-metamorphic-undifferentiated',
-								'Metamorphic, volcanic', 'pattern-metamorphic-volcanic',
-								'Melange', 'pattern-melange',
-								'Igneous, intrusive', 'pattern-igneous-intrusive',
-								'Unconsolidated, undifferentiated', 'pattern-unconsolidated-undifferentiated',
-								'Water', 'pattern-water',
-								'pattern-other'  // fallback
-							]
 						}
 					},
 					{
@@ -556,25 +542,6 @@ function headerToBounds(header: any): TileHeaderBounds {
 				url: buildPmtilesUrl(layer.filename),
 				...(layer.type === 'raster' ? { tileSize: 256 } : {})
 			});
-		}
-
-		// Load geology patterns for colorblind accessibility
-		// Load all 8 specific rock type patterns
-		const geologyTypes: GeologyType[] = [
-			'unconsolidated-undifferentiated',
-			'metamorphic-schist',
-			'metamorphic-sedimentary-clastic',
-			'metamorphic-undifferentiated',
-			'metamorphic-volcanic',
-			'melange',
-			'igneous-intrusive',
-			'water'
-		];
-
-		for (const type of geologyTypes) {
-			const color = geologyPatterns[type];
-			const pattern = generatePattern(type, color);
-			map.addImage(`pattern-${type}`, pattern);
 		}
 
 		// Add custom layers

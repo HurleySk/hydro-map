@@ -1,6 +1,6 @@
 # Hydro-Map
 
-**Version 1.2.2**
+**Version 1.3.0**
 
 An interactive web application for exploring hydrological and geological features, with on-demand watershed delineation, cross-section analysis, and multi-layer visualization.
 
@@ -17,6 +17,7 @@ An interactive web application for exploring hydrological and geological feature
 - **Feature Queries**: Inspect stream attributes at clicked locations using the Feature Info panel.
 - **Dynamic Legend**: Color gradient legend that appears when water accumulation layer is active.
 - **Tile Health Monitoring**: Built-in tile status panel reports coverage, reachability, and max zoom for every PMTiles source.
+- **Colorblind Accessible**: Geology layer features distinct texture patterns alongside colors for red/green colorblind users.
 
 ### Technical Highlights
 
@@ -56,7 +57,7 @@ cd backend && pip install -r requirements.txt
 cd ../frontend && npm install
 
 # Configure environment
-cp .env.example .env  # Edit paths as needed
+cp .env.example .env  # Add Stadia Maps API key and edit paths as needed
 ```
 
 ### Data Preparation
@@ -146,7 +147,12 @@ See [docs/API.md](docs/API.md) for complete API documentation with schemas and e
 
 ## Configuration
 
-Edit `.env` to customize data paths, delineation settings, and server options.
+Edit `.env` to customize data paths, delineation settings, basemap API keys, and server options.
+
+**Required for basemaps**: Get a free Stadia Maps API key at https://client.stadiamaps.com/signup/ and add to `.env`:
+```bash
+VITE_STADIA_API_KEY=your_api_key_here
+```
 
 See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete configuration reference.
 

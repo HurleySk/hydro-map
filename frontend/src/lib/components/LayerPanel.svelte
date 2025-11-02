@@ -3,9 +3,9 @@
 	import { slide } from 'svelte/transition';
 
 	const layerGroups: Record<string, string[]> = {
-		'Terrain': ['hillshade', 'slope', 'aspect'],
-		'Hydrology': ['streams-nhd', 'streams-dem', 'flow-accum', 'contours', 'huc12-outline']
-		// 'Geology': ['geology']  // No geology data available
+		'Terrain': ['hillshade', 'slope', 'aspect', 'contours'],
+		'Hydrology': ['streams-nhd', 'streams-dem', 'flow-accum'],
+		'Reference': ['huc12-outline', 'geology']
 	};
 
 	const layerNames: Record<string, string> = {
@@ -15,7 +15,7 @@
 		'streams-nhd': 'Real Streams',
 		'streams-dem': 'Drainage Network',
 		'flow-accum': 'Water Accumulation',
-		// geology: 'Geology',  // No geology data available
+		geology: 'Geology',
 		contours: 'Contours',
 		'huc12-outline': 'HUC12 Watersheds'
 	};
@@ -41,7 +41,7 @@
 	}
 
 	function toggleGroup(groupName: string) {
-		const key = groupName.toLowerCase() as 'terrain' | 'hydrology';
+		const key = groupName.toLowerCase() as 'terrain' | 'hydrology' | 'reference';
 		layerGroupStates.update(states => ({
 			...states,
 			[key]: !states[key]

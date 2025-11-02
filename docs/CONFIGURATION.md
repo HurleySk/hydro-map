@@ -1,6 +1,6 @@
 # Configuration Guide
 
-**Version**: 1.2.1
+**Version**: 1.3.0
 
 ## Overview
 
@@ -242,6 +242,24 @@ VITE_TILES_URL=http://localhost:8000/tiles
 VITE_API_URL=https://api.yourdomain.com
 VITE_TILES_URL=https://api.yourdomain.com/tiles
 ```
+
+#### Basemap Configuration
+
+```bash
+# Stadia Maps API key for feature-rich vector basemaps
+VITE_STADIA_API_KEY=your_api_key_here
+```
+
+**Stadia Maps** provides free vector basemaps with rich POI display (parks, schools, buildings, land use):
+- **Free tier**: 20,000 map views/month
+- **Signup**: https://client.stadiamaps.com/signup/
+- **Styles available**:
+  - `Detailed` (OSM Bright): High POI density with building footprints
+  - `Minimal` (Alidade Smooth): Clean, minimal style
+
+**Without API key**: Basemap will fail to load. Use "Data Only" mode to view just hydrological data layers.
+
+**Security**: API keys are exposed in frontend bundle. Free tier keys have usage limits and are domain-restricted.
 
 ### Build-Time vs Runtime Configuration
 

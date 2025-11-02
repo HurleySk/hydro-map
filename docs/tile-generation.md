@@ -1,6 +1,6 @@
 # Tile Generation Quick Reference
 
-**Version**: 1.2.1
+**Version**: 1.3.0
 
 Quick reference for common tile generation commands and workflows.
 

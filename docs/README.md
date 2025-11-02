@@ -1,6 +1,6 @@
 # Hydro-Map Documentation
 
-**Version**: 1.2.1
+**Version**: 1.3.0
 **Last Updated**: 2025-11-02
 
 ## Welcome
@@ -161,7 +161,7 @@ Documentation is organized into guides for different audiences and use cases:
 
 ## Version Information
 
-### Current Version: 1.2.1
+### Current Version: 1.3.0
 
 **Release Date**: 2025-11-02
 
@@ -179,6 +179,7 @@ Documentation is organized into guides for different audiences and use cases:
 
 ### Recent Changes
 
+- **v1.3.0** (2025-11-02): Stadia Maps vector basemaps with feature-rich POI display, water accumulation heatmap
 - **v1.2.1** (2025-11-02): Documentation overhaul
 - **v1.2.0** (2025-11-01): LAYER_SOURCES centralization refactor
 - **v1.1.1** (2025-10-31): Dual stream network support
@@ -334,4 +335,4 @@ Hydro-Map is open source software. See LICENSE file in the project root for deta
 
 **Questions or feedback?** Open an issue at https://github.com/HurleySk/hydro-map/issues
 
-**Last updated**: 2025-11-02 | **Version**: 1.2.1
+**Last updated**: 2025-11-02 | **Version**: 1.3.0

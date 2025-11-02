@@ -18,7 +18,7 @@
 				body: JSON.stringify({
 					lat: location.lat,
 					lon: location.lng,
-					buffer: 50
+					buffer: 10  // Precise buffer for accurate click detection
 				}),
 				signal: controller.signal
 			});
@@ -76,6 +76,10 @@
 							<div class="feature-name">Unnamed Stream</div>
 						{/if}
 
+						{#if stream.distance_meters !== undefined}
+							<div class="feature-distance">Distance: {stream.distance_meters}m</div>
+						{/if}
+
 						{#if stream.stream_order}
 							<div class="feature-attr">Stream Order: {stream.stream_order}</div>
 						{/if}
@@ -114,8 +118,17 @@
 				{#each features.geology as geo}
 					<div class="feature-item">
 						<div class="feature-name">{geo.formation}</div>
+						{#if geo.distance_meters !== undefined}
+							<div class="feature-distance">
+								{#if geo.distance_meters === 0}
+									At this location
+								{:else}
+									Distance: {geo.distance_meters}m
+								{/if}
+							</div>
+						{/if}
 						<div class="feature-attr">Type: {geo.rock_type}</div>
-						{#if geo.age !== 'Unknown'}
+						{#if geo.age && geo.age !== 'Unknown'}
 							<div class="feature-attr">Age: {geo.age}</div>
 						{/if}
 						{#if geo.description}
@@ -244,5 +257,12 @@
 		color: #475569;
 		margin-top: 0.5rem;
 		font-style: italic;
+	}
+
+	.feature-distance {
+		font-size: 0.75rem;
+		color: #3b82f6;
+		font-weight: 600;
+		margin-bottom: 0.25rem;
 	}
 </style>
