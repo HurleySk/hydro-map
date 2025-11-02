@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { layers } from '$lib/stores';
+	import { layers, layerGroupStates } from '$lib/stores';
+	import { slide } from 'svelte/transition';
 
 	const layerGroups: Record<string, string[]> = {
 		'Terrain': ['hillshade', 'slope', 'aspect'],
@@ -37,15 +38,51 @@
 			}
 		}));
 	}
+
+	function toggleGroup(groupName: string) {
+		const key = groupName.toLowerCase() as 'terrain' | 'hydrology';
+		layerGroupStates.update(states => ({
+			...states,
+			[key]: !states[key]
+		}));
+	}
 </script>
 
 <div class="panel">
 	<h3>Layers</h3>
 
 	{#each Object.entries(layerGroups) as [groupName, groupLayers]}
+		{@const groupKey = groupName.toLowerCase()}
+		{@const isExpanded = $layerGroupStates[groupKey]}
 		<div class="layer-group">
-			<h4>{groupName}</h4>
+			<button
+				class="group-header"
+				on:click={() => toggleGroup(groupName)}
+				type="button"
+				aria-expanded={isExpanded}
+			>
+				<svg
+					class="chevron"
+					class:rotated={isExpanded}
+					width="12"
+					height="12"
+					viewBox="0 0 12 12"
+					fill="none"
+					aria-hidden="true"
+				>
+					<path
+						d="M4.5 3L7.5 6L4.5 9"
+						stroke="currentColor"
+						stroke-width="1.5"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					/>
+				</svg>
+				<h4>{groupName}</h4>
+			</button>
 
+			{#if isExpanded}
+			<div class="group-content" transition:slide={{ duration: 200 }}>
 			{#each groupLayers as layerId}
 				{#if $layers[layerId]}
 					<div class="layer-item">
@@ -78,6 +115,8 @@
 					</div>
 				{/if}
 			{/each}
+			</div>
+			{/if}
 		</div>
 	{/each}
 </div>
@@ -109,13 +148,45 @@
 		margin-bottom: 0;
 	}
 
-	h4 {
-		margin: 0 0 0.5rem 0;
+	.group-header {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.25rem 0;
+		margin-bottom: 0.5rem;
+		background: none;
+		border: none;
+		cursor: pointer;
+		transition: opacity 0.2s;
+	}
+
+	.group-header:hover {
+		opacity: 0.8;
+	}
+
+	.group-header h4 {
+		margin: 0;
 		font-size: 0.875rem;
 		font-weight: 600;
 		color: #64748b;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
+		text-align: left;
+	}
+
+	.chevron {
+		flex-shrink: 0;
+		color: #94a3b8;
+		transition: transform 0.2s ease;
+	}
+
+	.chevron.rotated {
+		transform: rotate(90deg);
+	}
+
+	.group-content {
+		margin-left: 1.25rem;
 	}
 
 	.layer-item {

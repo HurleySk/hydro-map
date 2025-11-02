@@ -104,3 +104,27 @@ export const mapView = createPersistedStore<MapViewState>('view', DEFAULT_MAP_VI
 
 // Search history with localStorage persistence
 export const searchHistory = createPersistedStore<SearchHistoryItem[]>('search-history', []);
+
+// UI panel expansion states
+export interface PanelStates {
+	mapLayers: boolean;
+	analysisTools: boolean;
+	systemStatus: boolean;
+}
+
+export const panelStates = createPersistedStore<PanelStates>('panel-states', {
+	mapLayers: true,      // Expanded by default
+	analysisTools: true,  // Expanded by default
+	systemStatus: false   // Collapsed by default
+});
+
+// Layer group expansion states
+export interface LayerGroupStates {
+	terrain: boolean;
+	hydrology: boolean;
+}
+
+export const layerGroupStates = createPersistedStore<LayerGroupStates>('layer-group-states', {
+	terrain: false,    // Collapsed by default
+	hydrology: true    // Expanded by default
+});

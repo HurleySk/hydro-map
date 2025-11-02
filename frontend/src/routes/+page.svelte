@@ -7,7 +7,8 @@ import CrossSectionTool from '$lib/components/CrossSectionTool.svelte';
 import FeatureInfo from '$lib/components/FeatureInfo.svelte';
 import FeatureInfoTool from '$lib/components/FeatureInfoTool.svelte';
 import TileStatusPanel from '$lib/components/TileStatusPanel.svelte';
-	import { activeTool } from '$lib/stores';
+import CollapsiblePanel from '$lib/components/CollapsiblePanel.svelte';
+	import { activeTool, panelStates } from '$lib/stores';
 
 	let mapComponent: any;
 	let selectedFeature: any = null;
@@ -50,11 +51,37 @@ import TileStatusPanel from '$lib/components/TileStatusPanel.svelte';
 
 		<aside class="controls">
 			<LocationSearch on:select={handleLocationSelect} />
-			<LayerPanel />
-			<FeatureInfoTool />
-			<WatershedTool />
-			<CrossSectionTool />
- 			<TileStatusPanel />
+
+			<CollapsiblePanel
+				title="Map Layers"
+				icon="📚"
+				expanded={$panelStates.mapLayers}
+				storageKey="map-layers"
+			>
+				<LayerPanel />
+			</CollapsiblePanel>
+
+			<CollapsiblePanel
+				title="Analysis Tools"
+				icon="🔧"
+				expanded={$panelStates.analysisTools}
+				storageKey="analysis-tools"
+			>
+				<div class="tools-group">
+					<FeatureInfoTool />
+					<WatershedTool />
+					<CrossSectionTool />
+				</div>
+			</CollapsiblePanel>
+
+			<CollapsiblePanel
+				title="System Status"
+				icon="ℹ️"
+				expanded={$panelStates.systemStatus}
+				storageKey="system-status"
+			>
+				<TileStatusPanel />
+			</CollapsiblePanel>
 		</aside>
 
 		{#if selectedFeature}
@@ -114,12 +141,17 @@ import TileStatusPanel from '$lib/components/TileStatusPanel.svelte';
 		position: absolute;
 		top: 1rem;
 		left: 1rem;
+		bottom: 1rem;
 		z-index: 5;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
-		max-height: calc(100% - 2rem);
+		max-height: calc(100vh - 6rem);
 		overflow-y: auto;
+		overflow-x: hidden;
+		padding-right: 0.5rem;
+		min-width: 250px;
+		max-width: 350px;
 	}
 
 	.controls::-webkit-scrollbar {
@@ -133,5 +165,12 @@ import TileStatusPanel from '$lib/components/TileStatusPanel.svelte';
 	.controls::-webkit-scrollbar-thumb {
 		background: #cbd5e1;
 		border-radius: 3px;
+	}
+
+	.tools-group {
+		padding: 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
 	}
 </style>
