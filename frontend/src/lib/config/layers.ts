@@ -33,6 +33,9 @@ export interface LayerSource {
   /** Maximum zoom level for this layer */
   maxZoom?: number;
 
+  /** Tile size for raster sources (default: 256) */
+  tileSize?: number;
+
   /** Whether this layer is visible by default */
   defaultVisible: boolean;
 
@@ -54,7 +57,7 @@ export interface LayerSource {
  * Order determines rendering order (first = bottom, last = top).
  */
 export const LAYER_SOURCES: LayerSource[] = [
-  // Terrain layers (raster)
+  // Terrain layers (raster) - 1m resolution, 512px tiles
   {
     id: 'hillshade',
     label: 'Hillshade',
@@ -62,8 +65,11 @@ export const LAYER_SOURCES: LayerSource[] = [
     type: 'raster',
     defaultVisible: false,
     defaultOpacity: 0.6,
+    minZoom: 8,
+    maxZoom: 17,
+    tileSize: 512,
     category: 'terrain',
-    description: 'Shaded relief visualization of terrain'
+    description: 'Multi-directional shaded relief from 1m DEM'
   },
   {
     id: 'slope',
@@ -72,8 +78,11 @@ export const LAYER_SOURCES: LayerSource[] = [
     type: 'raster',
     defaultVisible: false,
     defaultOpacity: 0.7,
+    minZoom: 8,
+    maxZoom: 17,
+    tileSize: 512,
     category: 'terrain',
-    description: 'Slope angle in degrees'
+    description: 'Slope angle from 1m DEM (0-45 degrees)'
   },
   {
     id: 'aspect',
@@ -82,8 +91,11 @@ export const LAYER_SOURCES: LayerSource[] = [
     type: 'raster',
     defaultVisible: false,
     defaultOpacity: 0.7,
+    minZoom: 8,
+    maxZoom: 17,
+    tileSize: 512,
     category: 'terrain',
-    description: 'Compass direction of slope'
+    description: 'Color-coded slope direction (N=red, E=yellow, S=cyan, W=blue)'
   },
 
   // Hydrology layers (vector)
@@ -143,16 +155,17 @@ export const LAYER_SOURCES: LayerSource[] = [
     }
   },
   {
-    id: 'flow-accum',
-    label: 'Water Accumulation',
-    filename: 'flow_accum.pmtiles',
+    id: 'twi',
+    label: 'Topographic Wetness Index',
+    filename: 'twi.pmtiles',
     type: 'raster',
     defaultVisible: false,
     defaultOpacity: 0.65,
     category: 'hydrology',
-    description: 'Visualizes upslope water accumulation patterns with blue heatmap',
+    description: 'Shows areas prone to water saturation based on upslope area and local slope',
     minZoom: 8,
-    maxZoom: 17
+    maxZoom: 17,
+    tileSize: 512
   },
   {
     id: 'contours',

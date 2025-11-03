@@ -1,6 +1,6 @@
 # Tile Generation Quick Reference
 
-**Version**: 1.3.0
+**Version**: 1.5.0
 
 Quick reference for common tile generation commands and workflows.
 
@@ -524,50 +524,48 @@ gdalwarp -tr 30 30 -r bilinear input.tif downsampled.tif
 
 **Scripts use windowed processing** to limit memory usage, but very large DEMs may still need reduced resolution.
 
-## Water Accumulation Heatmap
+## Topographic Wetness Index (TWI) Raster
 
-The water accumulation layer requires special preprocessing to apply a color ramp. The process is:
+The TWI layer replaces the legacy water-accumulation heatmap. It highlights areas likely to retain water by combining flow accumulation and slope.
 
-1. **Log transform** the flow accumulation data (already exists at `data/processed/dem/flow_accumulation.tif`)
-2. **Normalize** to 8-bit using percentile bounds
-3. **Apply color ramp** using gdaldem color-relief
-4. **Generate tiles** as usual
+### Workflow Overview
 
-### Manual Generation Process
+1. **Compute TWI** from flow accumulation and slope rasters:
+   ```bash
+   python scripts/compute_twi.py --output data/processed/dem/twi.tif
+   ```
+2. **Normalize and color TWI** for map rendering:
+   ```bash
+   python scripts/process_twi_for_tiles.py
+   ```
+   This creates:
+   - `data/processed/dem/twi_8bit.tif` (0-255 normalized raster)
+   - `data/processed/dem/twi_color.tif` (RGBA raster with wetness color ramp)
+3. **Generate PMTiles** from the colorized raster (until `generate_tiles.py` adds native TWI support, use the manual pipeline below).
+
+### Manual PMTiles Generation
 
 ```bash
-# 1. Log transform
-gdal_calc.py -A data/processed/dem/flow_accumulation.tif \
-  --calc="log(1+A)" --NoDataValue=0 --type=Float32 \
-  --outfile data/processed/dem/flow_accum_log.tif
-
-# 2. Compute percentiles (p2=0.693, p98=5.878 for current data)
-python scripts/compute_percentiles.py
-
-# 3. Normalize to 8-bit
-gdal_translate -scale 0.693147 5.877736 0 255 -ot Byte \
-  data/processed/dem/flow_accum_log.tif \
-  data/processed/dem/flow_accum_8bit.tif
-
-# 4. Apply color ramp (blue gradient)
-gdaldem color-relief data/processed/dem/flow_accum_8bit.tif \
-  scripts/color_ramps/flow_accumulation.txt \
-  data/processed/dem/flow_accum_color.tif -alpha
-
-# 5. Generate tiles
+# 1. Generate XYZ tiles from the colorized raster
 gdal2tiles.py --xyz --zoom 8-17 -r bilinear \
-  data/processed/dem/flow_accum_color_opt.tif \
-  data/tiles/temp_tiles/flow_accum_xyz
+  data/processed/dem/twi_color.tif \
+  data/tiles/temp_tiles/twi_xyz
 
-# 6. Convert to PMTiles
-mb-util data/tiles/temp_tiles/flow_accum_xyz data/tiles/flow_accum.mbtiles
-sqlite3 data/tiles/flow_accum.mbtiles \
+# 2. Convert XYZ to MBTiles
+mb-util data/tiles/temp_tiles/twi_xyz data/tiles/twi.mbtiles
+
+# 3. Fix MBTiles metadata for overlays
+sqlite3 data/tiles/twi.mbtiles \
   "INSERT OR REPLACE INTO metadata (name, value) VALUES ('format', 'png'); \
    INSERT OR REPLACE INTO metadata (name, value) VALUES ('type', 'overlay');"
-pmtiles convert data/tiles/flow_accum.mbtiles data/tiles/flow_accum.pmtiles
+
+# 4. Convert MBTiles to PMTiles
+pmtiles convert data/tiles/twi.mbtiles data/tiles/twi.pmtiles
 ```
 
-The color ramp file (`scripts/color_ramps/flow_accumulation.txt`) defines the blue gradient from transparent to deep blue.
+**Color ramp**: `scripts/color_ramps/twi.txt` controls the dry -> wet gradient. Adjust percentile parameters in `process_twi_for_tiles.py` if your area has very flat or very steep terrain.
+
+**Cleanup**: Remove `data/tiles/temp_tiles/twi_xyz` and the intermediate `twi.mbtiles` once `twi.pmtiles` is verified to save disk space.
 
 ## Advanced Options
 

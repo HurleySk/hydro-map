@@ -1,6 +1,6 @@
 # User Interface Guide
 
-**Version**: 1.3.0
+**Version**: 1.5.0
 
 ## Overview
 
@@ -71,23 +71,23 @@ Left sidebar, top section
 
 Layers are organized into collapsible groups:
 
-#### **Terrain** (3 layers)
+#### **Terrain** (4 layers)
 - **Hillshade**: Grayscale shaded relief showing terrain texture
 - **Slope**: Gradient color map showing terrain steepness (0-45+ degrees)
 - **Aspect**: Directional color map showing slope orientation (N/E/S/W)
+- **Contours**: 10 m elevation contour lines derived from the DEM
 
-#### **Hydrology** (5 layers)
+#### **Hydrology** (3 layers)
 - **Real Streams**: NHD-based stream network (US only, curated data)
 - **Drainage Network**: DEM-derived calculated streams (global coverage)
-- **Water Accumulation**: Flow accumulation heatmap (darker = more upstream area)
-- **Contours**: Elevation contour lines (10m interval)
-- **HUC12 Watersheds**: USGS watershed boundary reference layer with labels
+- **Topographic Wetness Index (TWI)**: Raster portraying likely wet areas (blue gradient; darker = wetter)
 
-#### **Reference** (1 layer)
+#### **Reference** (2 layers)
+- **HUC12 Watersheds**: USGS watershed boundary reference layer with outlines and labels
 - **Geology**: Geological formations with distinct patterns (if data available)
   - Colored by rock type (igneous, sedimentary, metamorphic, volcanic, etc.)
   - Texture patterns for colorblind accessibility
-  - Seven distinct patterns: horizontal lines, diagonal, crosshatch, waves, dots, vertical lines, sparse dots
+  - Legend automatically appears when geology is visible
 
 ### Layer Controls
 
@@ -98,9 +98,8 @@ Each layer has a checkbox to control visibility:
 - **Unchecked**: Layer is hidden
 
 **Default visibility** (on startup):
-- Hillshade: ✓ (visible)
-- Real Streams: ✓ (visible)
-- All others: ✗ (hidden)
+- Real Streams (NHD): ✓ (visible)
+- All other layers: ✗ (hidden until toggled on)
 
 #### Opacity Slider
 
@@ -385,7 +384,8 @@ Click points on the map:
 When you have 2+ points:
 - Click **"Generate Profile"** button
 - Processing begins (typically <1 second)
-- Elevation chart appears below line drawing area
+- Summary card appears showing total distance, sample count, and geology contact count
+- Elevation chart appears below the summary
 
 #### 4. View Chart
 
@@ -405,7 +405,7 @@ The cross-section chart displays:
 If geology data is loaded, colored bands show geological formations:
 - **Colors**: Different rock types have distinct colors
 - **Labels**: Formation names on hover
-- **Contacts**: Boundaries between formations
+- **Contacts**: Boundaries between formations; summary card lists total contacts
 
 #### 6. Edit Line
 
@@ -470,6 +470,7 @@ Click **"Feature Info"** button
 - Button turns blue (active state)
 - Instructions appear: "Click on a feature to get information"
 - Cursor changes to pointer on map
+- Search Buffer slider appears (10-200 m); adjust before clicking the map
 
 #### 2. Click Feature
 
@@ -494,6 +495,7 @@ Click any location on the map:
 - Rock type
 - Geological age
 - Formation description
+- Returned even if the geology layer is toggled off (for contextual awareness)
 
 **No features**:
 - Message: "No features found at this location"
@@ -501,6 +503,7 @@ Click any location on the map:
 #### 4. Buffer Distance
 
 Default: 10m search buffer around click point
+Adjustable: 10-200 m via the slider in the Feature Info panel
 
 **Rationale**: Allows clicking "near" a stream without perfect precision.
 
@@ -520,7 +523,10 @@ Currently queries:
 - **Streams**: Both NHD and DEM-derived streams
 - **Geology**: If geology data is available
 
-**Note**: Other layers (hillshade, slope, aspect, contours, HUC12) are not queryable via feature info tool. These are raster or non-attributed layers.
+**Note**:
+- Other layers (hillshade, slope, aspect, contours, HUC12) are not queryable via feature info tool because they lack click-ready attributes.
+- If both stream layers are hidden, the tool automatically queries **Real Streams** (NHD) to provide context.
+- Geology is queried regardless of layer visibility so rock information is always returned when data is available.
 
 ### Use Cases
 
@@ -542,7 +548,7 @@ Currently queries:
 ### Tips
 
 - **Zoom in**: More accurate clicking at higher zoom levels
-- **Layer visibility**: Enable layers you want to query (invisible layers are not queried)
+- **Layer visibility**: Visible stream layers are queried; if none are visible the tool falls back to Real Streams. Geology is queried even when the layer is hidden.
 - **Stream selection**: If clicking doesn't find stream, try zooming in or clicking directly on the blue line
 
 ---
@@ -584,9 +590,10 @@ Shows status for each PMTiles file:
 - Aspect (aspect.pmtiles)
 - Real Streams (streams_nhd.pmtiles)
 - Drainage Network (streams_dem.pmtiles)
-- Water Accumulation (flow_accumulation.pmtiles)
+- Topographic Wetness Index (twi.pmtiles)
 - Contours (contours.pmtiles)
 - HUC12 Watersheds (huc12.pmtiles)
+- Geology (geology.pmtiles)
 
 ### Troubleshooting
 

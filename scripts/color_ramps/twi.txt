@@ -1,0 +1,28 @@
+# TWI (Topographic Wetness Index) Color Ramp
+# Blue gradient: dry (low TWI) to wet (high TWI)
+# 8 stops for smooth gradient
+# Values are 0-255 after normalization
+
+# Dry areas (low wetness)
+0 255 255 230 128
+
+# Transition to light blue
+32 230 240 255 140
+
+# Light blue (moderate wetness)
+64 200 230 255 160
+
+# Medium blue
+96 150 210 255 180
+
+# Deeper blue
+128 100 180 255 200
+
+# Dark blue
+160 70 130 220 220
+
+# Very dark blue (high wetness)
+192 40 90 180 240
+
+# Maximum wetness
+255 12 44 132 255

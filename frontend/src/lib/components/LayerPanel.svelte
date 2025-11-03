@@ -4,7 +4,7 @@
 
 	const layerGroups: Record<string, string[]> = {
 		'Terrain': ['hillshade', 'slope', 'aspect', 'contours'],
-		'Hydrology': ['streams-nhd', 'streams-dem', 'flow-accum'],
+		'Hydrology': ['streams-nhd', 'streams-dem', 'twi'],
 		'Reference': ['huc12-outline', 'geology']
 	};
 
@@ -14,7 +14,7 @@
 		aspect: 'Aspect',
 		'streams-nhd': 'Real Streams',
 		'streams-dem': 'Drainage Network',
-		'flow-accum': 'Water Accumulation',
+		'twi': 'Topographic Wetness Index',
 		geology: 'Geology',
 		contours: 'Contours',
 		'huc12-outline': 'HUC12 Watersheds'

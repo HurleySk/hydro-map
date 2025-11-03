@@ -153,7 +153,18 @@ function headerToBounds(header: any): TileHeaderBounds {
 
 			// Get saved view or use defaults
 			const savedView = $mapView;
-			let initialCenter = savedView?.center || DEFAULT_CENTER;
+
+			// Validate saved center - reject if too far from data area (>100km from default)
+			let initialCenter = DEFAULT_CENTER;
+			if (savedView?.center) {
+				const dx = savedView.center[0] - DEFAULT_CENTER[0];
+				const dy = savedView.center[1] - DEFAULT_CENTER[1];
+				const distanceKm = Math.sqrt(dx * dx + dy * dy) * 111; // rough conversion to km
+				if (distanceKm < 100) {
+					initialCenter = savedView.center;
+				}
+			}
+
 			const initialZoom = savedView?.zoom || DEFAULT_ZOOM;
 
 			// If current center is outside any tile coverage, recenter to data
@@ -554,7 +565,7 @@ function headerToBounds(header: any): TileHeaderBounds {
 			map.addSource(layer.id, {
 				type: layer.type,
 				url: buildPmtilesUrl(layer.filename),
-				...(layer.type === 'raster' ? { tileSize: 256 } : {})
+				...(layer.type === 'raster' ? { tileSize: layer.tileSize || 256 } : {})
 			});
 		}
 
@@ -679,7 +690,7 @@ function headerToBounds(header: any): TileHeaderBounds {
 			sources[layer.id] = {
 				type: layer.type,
 				url: buildPmtilesUrl(layer.filename),
-				...(layer.type === 'raster' ? { tileSize: 256 } : {})
+				...(layer.type === 'raster' ? { tileSize: layer.tileSize || 256 } : {})
 			};
 		}
 

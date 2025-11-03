@@ -1,6 +1,6 @@
 # Data Preparation Guide
 
-**Version**: 1.3.0
+**Version**: 1.5.0
 
 This guide walks you through preparing data for the Hydro-Map application, including DEM processing, stream extraction (both DEM-derived and NHD-based), HUC12 watershed boundaries, and tile generation.
 
@@ -671,7 +671,7 @@ For example:
 
 ## Step 6: Add Geology Data (Optional)
 
-**Note**: Geology is currently a planned feature and not active in the UI (v1.2.1). The backend supports geology, but the layer is not in LAYER_SOURCES configuration.
+**Note**: The geology layer is fully supported in the UI as of v1.5.0. Providing geology data enables map overlays, Feature Info results, and cross-section geology contact counts.
 
 ### Download Geology
 

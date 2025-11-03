@@ -16,8 +16,18 @@ class Settings(BaseSettings):
     DEM_PATH: str = "../data/processed/dem/filled_dem.tif"
     FLOW_DIR_PATH: str = "../data/processed/dem/flow_direction.tif"
     FLOW_ACC_PATH: str = "../data/processed/dem/flow_accumulation.tif"
-    STREAMS_PATH: str = "../data/processed/streams_nhd.gpkg"
+    STREAMS_PATH: str = "../data/processed/streams_nhd.gpkg"  # Legacy, kept for backward compatibility
     GEOLOGY_PATH: str = "../data/processed/geology.gpkg"
+    HUC12_PATH: str = "../data/processed/huc12.gpkg"
+
+    # Dataset mapping for logical layer names to file paths
+    # Maps frontend layer IDs to (file_path, layer_name) tuples
+    LAYER_DATASET_MAP: dict = {
+        "streams-nhd": ("../data/processed/streams_nhd.gpkg", "streams"),
+        "streams-dem": ("../data/processed/streams_dem.gpkg", "streams"),
+        "geology": ("../data/processed/geology.gpkg", None),
+        "huc12": ("../data/processed/huc12.gpkg", None)
+    }
 
     # Watershed delineation settings
     SNAP_TO_STREAM: bool = True

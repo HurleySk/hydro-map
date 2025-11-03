@@ -104,6 +104,66 @@ def normalize_attributes(gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     return normalized
 
 
+def apply_unit_lookup(gdf: gpd.GeoDataFrame, lookup_csv: Path) -> gpd.GeoDataFrame:
+    """
+    Join with unit lookup CSV to replace map unit codes with full formation names.
+
+    Args:
+        gdf: GeoDataFrame with 'unit' column containing map symbols (e.g., "O[o")
+        lookup_csv: Path to CSV file with columns 'orig_label' and 'unit_name'
+
+    Returns:
+        GeoDataFrame with 'unit' column updated to contain full formation names
+    """
+    if not lookup_csv.exists():
+        print(f"Warning: Lookup CSV {lookup_csv} not found, skipping unit name mapping")
+        return gdf
+
+    print(f"Reading unit lookup table from {lookup_csv}...")
+
+    # Read lookup CSV
+    lookup = pd.read_csv(lookup_csv)
+
+    # Clean column names (remove whitespace)
+    lookup.columns = lookup.columns.str.strip()
+
+    # Verify required columns exist
+    if 'orig_label' not in lookup.columns or 'unit_name' not in lookup.columns:
+        print(f"Warning: Lookup CSV missing required columns 'orig_label' or 'unit_name'")
+        print(f"Available columns: {list(lookup.columns)}")
+        return gdf
+
+    # Create mapping dict: orig_label -> unit_name
+    # Strip whitespace from both keys and values
+    unit_map = {}
+    for _, row in lookup.iterrows():
+        if pd.notna(row['orig_label']) and pd.notna(row['unit_name']):
+            key = str(row['orig_label']).strip()
+            value = str(row['unit_name']).strip()
+            unit_map[key] = value
+
+    print(f"Loaded {len(unit_map)} unit name mappings")
+
+    # Replace unit codes with full names
+    result = gdf.copy()
+    mapped_count = 0
+    unmapped_count = 0
+
+    for idx, row in result.iterrows():
+        unit_code = str(row['unit']) if pd.notna(row['unit']) else None
+        if unit_code and unit_code in unit_map:
+            result.at[idx, 'unit'] = unit_map[unit_code]
+            mapped_count += 1
+        elif unit_code:
+            unmapped_count += 1
+
+    print(f"Mapped {mapped_count} units to full names")
+    if unmapped_count > 0:
+        print(f"Warning: {unmapped_count} units had no matching name in lookup CSV")
+
+    return result
+
+
 def generate_color_from_string(s: str) -> str:
     """Generate a deterministic color from a string using hash."""
     # Create hash of the string
@@ -224,7 +284,7 @@ def create_sample_geology(bounds: tuple = (-122.5, 37.7, -122.3, 37.9)) -> gpd.G
     return gdf
 
 
-def prepare_geology(input_path: Optional[Path], output_path: Path, create_sample: bool = False):
+def prepare_geology(input_path: Optional[Path], output_path: Path, create_sample: bool = False, lookup_csv: Optional[Path] = None):
     """Main function to prepare geology data."""
 
     if create_sample:
@@ -249,6 +309,11 @@ def prepare_geology(input_path: Optional[Path], output_path: Path, create_sample
     # Normalize attributes
     print("Normalizing attributes...")
     gdf = normalize_attributes(gdf)
+
+    # Apply unit lookup if CSV provided
+    if lookup_csv:
+        print("Applying unit name lookup...")
+        gdf = apply_unit_lookup(gdf, lookup_csv)
 
     # Assign colors
     print("Assigning colors based on rock types...")
@@ -279,6 +344,8 @@ def main():
     parser.add_argument('--input', type=Path, help='Input geology file (shapefile, GeoJSON, etc.)')
     parser.add_argument('--output', type=Path, default=Path('data/processed/geology.gpkg'),
                         help='Output GeoPackage path')
+    parser.add_argument('--lookup-csv', type=Path,
+                        help='CSV file with unit code to formation name mappings (columns: orig_label, unit_name)')
     parser.add_argument('--create-sample', action='store_true',
                         help='Create sample geology data for testing')
     parser.add_argument('--bounds', nargs=4, type=float,
@@ -295,7 +362,8 @@ def main():
     success = prepare_geology(
         input_path=args.input,
         output_path=args.output,
-        create_sample=args.create_sample
+        create_sample=args.create_sample,
+        lookup_csv=args.lookup_csv
     )
 
     return 0 if success else 1

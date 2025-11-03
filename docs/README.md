@@ -1,7 +1,7 @@
 # Hydro-Map Documentation
 
-**Version**: 1.3.0
-**Last Updated**: 2025-11-02
+**Version**: 1.5.0
+**Last Updated**: 2025-11-04
 
 ## Welcome
 
@@ -149,6 +149,11 @@ Documentation is organized into guides for different audiences and use cases:
 - **Drainage Network** (streams-dem): DEM-derived, global coverage, calculated
 - See [Stream Network Data](data/STREAMS.md)
 
+**Topographic Wetness Index** (v1.4.0+):
+- Generated via `scripts/compute_twi.py` + `scripts/process_twi_for_tiles.py`
+- Blue gradient raster highlights likely saturated areas
+- Visible in the Hydrology group alongside stream layers
+
 **Layer Architecture** (v1.2.0+):
 - Single source of truth: `frontend/src/lib/config/layers.ts`
 - Automatic registration in Map.svelte and LayerPanel.svelte
@@ -161,24 +166,24 @@ Documentation is organized into guides for different audiences and use cases:
 
 ## Version Information
 
-### Current Version: 1.3.0
+### Current Version: 1.5.0
 
-**Release Date**: 2025-11-02
+**Release Date**: 2025-11-04
 
 **Key Features**:
+- Geology layer fully enabled with colorblind-safe textures and automatic legend display
+- Feature Info tool with adjustable query buffer and automatic geology lookups
+- Cross-section results enhanced with distance metrics, sample counts, and geology contact totals
 - Dual stream network support (NHD + DEM-derived)
-- HUC12 watershed boundary reference layer
-- Centralized layer configuration (LAYER_SOURCES)
-- Pure DEM-based global stream extraction
-- Multi-threshold stream extraction with confidence scoring
-- Location search with history
-- UI state persistence
-- Tile status monitoring
+- Centralized layer configuration (LAYER_SOURCES) powering Map and Layer panels
+- Tile status monitoring via the System Status panel
 
 **See**: [CHANGELOG.md](../CHANGELOG.md) for complete version history
 
 ### Recent Changes
 
+- **v1.5.0** (2025-11-04): Geology layer fully enabled, Feature Info buffer control, cross-section geology metrics
+- **v1.4.0** (2025-11-02): Documentation refresh and TWI layer release
 - **v1.3.0** (2025-11-02): Stadia Maps vector basemaps with feature-rich POI display, water accumulation heatmap
 - **v1.2.1** (2025-11-02): Documentation overhaul
 - **v1.2.0** (2025-11-01): LAYER_SOURCES centralization refactor
@@ -335,4 +340,4 @@ Hydro-Map is open source software. See LICENSE file in the project root for deta
 
 **Questions or feedback?** Open an issue at https://github.com/HurleySk/hydro-map/issues
 
-**Last updated**: 2025-11-02 | **Version**: 1.3.0
+**Last updated**: 2025-11-04 | **Version**: 1.5.0

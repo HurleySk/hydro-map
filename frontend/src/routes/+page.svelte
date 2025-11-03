@@ -9,12 +9,13 @@ import FeatureInfo from '$lib/components/FeatureInfo.svelte';
 import FeatureInfoTool from '$lib/components/FeatureInfoTool.svelte';
 import TileStatusPanel from '$lib/components/TileStatusPanel.svelte';
 import CollapsiblePanel from '$lib/components/CollapsiblePanel.svelte';
-import Legend from '$lib/components/Legend.svelte';
 import GeologyLegend from '$lib/components/GeologyLegend.svelte';
+import TWILegend from '$lib/components/TWILegend.svelte';
 	import { activeTool, panelStates, layers } from '$lib/stores';
 
 	let mapComponent: any;
 	let selectedFeature: any = null;
+	let featureInfoBuffer = 10; // Default buffer for feature info queries
 
 	function handleMapClick(event: CustomEvent) {
 		const { lngLat, point } = event.detail;
@@ -73,7 +74,7 @@ import GeologyLegend from '$lib/components/GeologyLegend.svelte';
 				storageKey="analysis-tools"
 			>
 				<div class="tools-group">
-					<FeatureInfoTool />
+					<FeatureInfoTool bind:bufferRadius={featureInfoBuffer} />
 					<WatershedTool />
 					<CrossSectionTool />
 				</div>
@@ -92,6 +93,7 @@ import GeologyLegend from '$lib/components/GeologyLegend.svelte';
 		{#if selectedFeature}
 			<FeatureInfo
 				location={selectedFeature.lngLat}
+				buffer={featureInfoBuffer}
 				on:close={() => {
 					selectedFeature = null;
 					activeTool.set('none');
@@ -99,8 +101,8 @@ import GeologyLegend from '$lib/components/GeologyLegend.svelte';
 			/>
 		{/if}
 
-		{#if $layers['flow-accum']?.visible}
-			<Legend opacity={$layers['flow-accum'].opacity} />
+		{#if $layers['twi']?.visible}
+			<TWILegend opacity={$layers['twi'].opacity} />
 		{/if}
 
 		{#if $layers['geology']?.visible}

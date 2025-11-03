@@ -5,6 +5,46 @@ All notable changes to Hydro-Map are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2025-11-04
+
+### Added
+- **Geology Layer Integration**: Geology layer is now fully enabled in the UI with automatic legend support and texture patterns for colorblind accessibility.
+- **Feature Info Enhancements**: Adjustable query buffer (10-200m) with persistence, automatic geology queries even when the layer is hidden, and clearer stream/geology grouping.
+
+### Changed
+- Cross-section tool now reports total distance, sample count, and geology contact totals alongside the elevation chart.
+- Documentation refreshed to reflect geology availability, updated layer groupings, and new Feature Info controls.
+
+## [1.4.0] - 2025-11-03
+
+### Added
+- **Topographic Wetness Index (TWI) Layer**: Hydrologically meaningful wetness visualization
+  - Replaces Water Accumulation heatmap with interpretable wetness index
+  - Formula: TWI = ln(upslope_area / tan(slope))
+  - Blue gradient from dry (light) to wet (deep blue) areas
+  - 483MB PMTiles with zoom levels 8-17
+  - Dynamic legend component (`TWILegend.svelte`) showing wet/dry gradient
+  - Better identifies areas prone to water saturation for hydrological analysis
+
+### Removed
+- **Water Accumulation Layer**: Deprecated in favor of TWI
+  - Removed flow-accum layer from UI (LayerPanel, layers.ts configuration)
+  - Removed Legend.svelte component (replaced by TWILegend.svelte)
+  - Removed flow_accum_cells from Feature Info DEM samples
+  - Deleted flow_accum PMTiles and intermediate processing files (~147MB freed)
+  - Deleted processing scripts (compute_percentiles.py, flow_accumulation color ramp)
+  - Note: Source data (flow_accumulation.tif) preserved for watershed delineation and stream extraction
+
+### Technical
+- Processing pipeline: Compute TWI from slope and flow accumulation → Percentile normalization (P2-P98) → 8-bit → Color relief → PMTiles
+- Backend dem_sampling.py updated to remove flow accumulation sampling
+- LayerPanel component cleanup to remove Water Accumulation references
+
+## [1.3.1] - 2025-11-02
+
+### Changed
+- Documentation alignment for v1.3.1 release (updated version references across markdown guides)
+
 ## [1.3.0] - 2025-11-02
 
 ### Added

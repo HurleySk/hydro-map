@@ -1,5 +1,6 @@
 # Stream Network Quality Assurance Report
 
+**Hydro-Map Version**: 1.3.1
 **Generated:** 2025-11-01 09:58:19
 **Source:** `data/processed/streams_filtered.gpkg` (layer: `streams_t250_filtered`)
 **CRS:** EPSG:4326

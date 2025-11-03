@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-**Version**: 1.3.0
+**Version**: 1.5.0
 
 Get Hydro-Map running in minutes.
 
@@ -248,13 +248,14 @@ Navigate to: http://localhost:5173
 
 **Left Panel - Map Layers**:
 - Terrain group: Hillshade, Slope, Aspect, Contours
-- Hydrology group: Real Streams (NHD), DEM-Derived Streams, HUC12 Boundaries
+- Hydrology group: Real Streams (NHD), DEM-Derived Streams, Topographic Wetness Index (TWI)
+- Reference group: HUC12 Watersheds, Geology (legend appears automatically when geology is visible)
 - Toggle visibility and adjust opacity for each layer
 
 **Left Panel - Analysis Tools**:
+- Feature Info (adjustable search buffer)
 - Delineate Watershed
 - Draw Cross-Section
-- Feature Info
 
 **Left Panel - System Status**:
 - Tile Status panel shows coverage and max zoom for all PMTiles
@@ -273,6 +274,8 @@ Navigate to: http://localhost:5173
 2. **Real Streams** (NHD) is visible by default (if you processed NHD data)
 3. Toggle **DEM-Derived Streams** to compare calculated vs. official streams
 4. Notice the color gradient on DEM-derived streams (darker = larger drainage area)
+5. Toggle **Topographic Wetness Index** (TWI) for a raster view of likely wet terrain; adjust opacity to blend with the basemap
+6. Expand the **Reference** group to toggle HUC12 watersheds or geology; the geology legend appears automatically when the layer is visible
 
 ### 4. Delineate a Watershed
 
@@ -298,9 +301,9 @@ Navigate to: http://localhost:5173
 1. Click **"Draw Cross-Section"** in Analysis Tools
 2. Click 2 or more points on the map to define a profile line
 3. Click **"Generate Profile"** button
-4. View elevation chart below the map
-5. Hover over the chart to see elevation at each point
-6. Click **"Clear"** to remove and start a new section
+4. Review the summary card (distance, number of samples, geology contacts) and elevation chart
+5. Hover over the chart to see elevation at each point; geology bands appear if geology data is available
+6. Click **"Clear Line"** to remove and start a new section
 
 ### 6. Check Tile Coverage
 
@@ -320,6 +323,14 @@ Navigate to: http://localhost:5173
 3. Select from search results
 4. Map flies to location
 5. Recent searches saved in dropdown
+
+### 8. Inspect Nearby Features
+
+1. Click **"Feature Info"** in Analysis Tools (button turns blue when active)
+2. Adjust the **Search Buffer** slider (10-200 m) to control how far from the click point features are queried
+3. Click the map near a stream or inside a geology polygon
+4. Review stream and geology attributes in the Feature Info panel; geology is returned even if the layer is hidden
+5. Click **"Cancel"** to exit Feature Info mode
 
 ## Verify Installation
 

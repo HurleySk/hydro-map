@@ -1,26 +1,70 @@
 <script lang="ts">
-	import { createEventDispatcher, onMount, onDestroy } from 'svelte';
+	import { createEventDispatcher, onDestroy } from 'svelte';
+	import { layers } from '$lib/stores';
+	import { get } from 'svelte/store';
 
 	export let location: { lng: number; lat: number };
+	export let buffer = 10; // Buffer in meters (default 10)
 
 	const dispatch = createEventDispatcher();
 
 	let features: any = null;
 	let loading = true;
 	let error = false;
-	const controller = new AbortController();
+	let queriedLayers: string[] = [];
+	let currentController: AbortController | null = null;
 
-	onMount(async () => {
+	// Reactive statement: fetch whenever location or buffer changes
+	$: {
+		fetchFeatureInfo(location, buffer);
+	}
+
+	async function fetchFeatureInfo(loc: { lng: number; lat: number }, buf: number) {
+		// Cancel previous fetch if still running
+		if (currentController) {
+			currentController.abort();
+		}
+
+		// Reset state for new fetch
+		loading = true;
+		error = false;
+
+		// Create new controller for this fetch
+		currentController = new AbortController();
+
 		try {
+			// Build layers array from visible layers
+			const layersState = get(layers);
+			const layersToQuery: string[] = [];
+
+			// Check which stream layers are visible
+			if (layersState['streams-nhd']?.visible) {
+				layersToQuery.push('streams-nhd');
+			}
+			if (layersState['streams-dem']?.visible) {
+				layersToQuery.push('streams-dem');
+			}
+
+			// Always query geology (provides important context even if layer is hidden)
+			layersToQuery.push('geology');
+
+			// If no stream layers selected, default to streams-nhd
+			if (!layersToQuery.includes('streams-nhd') && !layersToQuery.includes('streams-dem')) {
+				layersToQuery.push('streams-nhd');
+			}
+
+			queriedLayers = layersToQuery;
+
 			const response = await fetch('/api/feature-info', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					lat: location.lat,
-					lon: location.lng,
-					buffer: 10  // Precise buffer for accurate click detection
+					lat: loc.lat,
+					lon: loc.lng,
+					buffer: buf,
+					layers: layersToQuery
 				}),
-				signal: controller.signal
+				signal: currentController.signal
 			});
 
 			if (!response.ok) {
@@ -32,21 +76,33 @@
 			loading = false;
 		} catch (err: any) {
 			if (err?.name === 'AbortError') {
+				// Silently ignore aborted requests (happens when user clicks rapidly)
 				return;
 			}
 			console.error('Feature info error:', err);
 			error = true;
 			loading = false;
 		}
-	});
+	}
 
 	function close() {
 		dispatch('close');
 	}
 
 	onDestroy(() => {
-		controller.abort();
+		if (currentController) {
+			currentController.abort();
+		}
 	});
+
+	function formatLayerName(layerId: string): string {
+		const layerNames: Record<string, string> = {
+			'streams-nhd': 'Real Streams (NHD)',
+			'streams-dem': 'Calculated Streams (DEM)',
+			'geology': 'Geology'
+		};
+		return layerNames[layerId] || layerId;
+	}
 </script>
 
 <div class="feature-info">
@@ -59,6 +115,12 @@
 		<strong>Location:</strong><br/>
 		{location.lat.toFixed(5)}, {location.lng.toFixed(5)}
 	</div>
+
+	{#if queriedLayers.length > 0}
+		<div class="queried-layers">
+			<strong>Querying:</strong> {queriedLayers.map(formatLayerName).join(', ')}
+		</div>
+	{/if}
 
 	{#if loading}
 		<div class="loading">Loading...</div>
@@ -76,8 +138,20 @@
 							<div class="feature-name">Unnamed Stream</div>
 						{/if}
 
+						{#if stream.source_type}
+							<div class="feature-badge">
+								{stream.source_type === 'nhd' ? 'Real Stream (NHD)' : 'Calculated Stream (DEM)'}
+							</div>
+						{/if}
+
 						{#if stream.distance_meters !== undefined}
-							<div class="feature-distance">Distance: {stream.distance_meters}m</div>
+							<div class="feature-distance">
+								{#if stream.is_nearest}
+									Nearest stream ({stream.distance_meters}m away)
+								{:else}
+									Distance: {stream.distance_meters}m
+								{/if}
+							</div>
 						{/if}
 
 						{#if stream.stream_order}
@@ -118,12 +192,20 @@
 				{#each features.geology as geo}
 					<div class="feature-item">
 						<div class="feature-name">{geo.formation}</div>
-						{#if geo.distance_meters !== undefined}
+						{#if geo.map_unit && geo.map_unit !== geo.formation}
+							<div class="feature-attr">Unit Code: {geo.map_unit}</div>
+						{/if}
+						{#if geo.distance_to_contact_m !== undefined}
 							<div class="feature-distance">
-								{#if geo.distance_meters === 0}
+								{#if geo.distance_to_contact_m === 0}
 									At this location
+								{:else if geo.is_nearest}
+									Nearest formation ({geo.distance_to_contact_m}m away)
 								{:else}
-									Distance: {geo.distance_meters}m
+									Distance to boundary: {geo.distance_to_contact_m}m
+								{/if}
+								{#if geo.precision}
+									<span class="precision-badge">({geo.precision})</span>
 								{/if}
 							</div>
 						{/if}
@@ -131,11 +213,49 @@
 						{#if geo.age && geo.age !== 'Unknown'}
 							<div class="feature-attr">Age: {geo.age}</div>
 						{/if}
+						{#if geo.source}
+							<div class="feature-attr">Source: {geo.source}</div>
+						{/if}
 						{#if geo.description}
 							<div class="feature-description">{geo.description}</div>
 						{/if}
 					</div>
 				{/each}
+			</div>
+		{/if}
+
+		{#if features.huc12}
+			<div class="feature-group">
+				<h4>Watershed</h4>
+				<div class="feature-item">
+					<div class="feature-name">{features.huc12.name}</div>
+					<div class="feature-attr">HUC12: {features.huc12.huc12}</div>
+					<div class="feature-attr">Area: {features.huc12.area_sqkm.toFixed(2)} km²</div>
+					{#if features.huc12.states}
+						<div class="feature-attr">States: {features.huc12.states}</div>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
+		{#if features.dem_samples}
+			<div class="feature-group">
+				<h4>Terrain</h4>
+				<div class="feature-item">
+					{#if features.dem_samples.elevation_m !== null && features.dem_samples.elevation_m !== undefined}
+						<div class="feature-attr">Elevation: {features.dem_samples.elevation_m.toFixed(1)} m</div>
+					{/if}
+					{#if features.dem_samples.slope_deg !== null && features.dem_samples.slope_deg !== undefined}
+						<div class="feature-attr">
+							Slope: {features.dem_samples.slope_deg.toFixed(1)}° ({(Math.tan(features.dem_samples.slope_deg * Math.PI / 180) * 100).toFixed(1)}%)
+						</div>
+					{/if}
+					{#if features.dem_samples.aspect_deg !== null && features.dem_samples.aspect_deg !== undefined}
+						<div class="feature-attr">
+							Aspect: {features.dem_samples.aspect_cardinal} ({features.dem_samples.aspect_deg.toFixed(0)}°)
+						</div>
+					{/if}
+				</div>
 			</div>
 		{/if}
 	{:else}
@@ -196,6 +316,14 @@
 		background: #f8fafc;
 		font-size: 0.813rem;
 		color: #475569;
+		border-bottom: 1px solid #e2e8f0;
+	}
+
+	.queried-layers {
+		padding: 0.75rem 1rem;
+		background: #f1f5f9;
+		font-size: 0.75rem;
+		color: #64748b;
 		border-bottom: 1px solid #e2e8f0;
 	}
 
@@ -264,5 +392,25 @@
 		color: #3b82f6;
 		font-weight: 600;
 		margin-bottom: 0.25rem;
+	}
+
+	.feature-badge {
+		display: inline-block;
+		padding: 0.125rem 0.5rem;
+		background: #dbeafe;
+		color: #1e40af;
+		border-radius: 0.25rem;
+		font-size: 0.688rem;
+		font-weight: 600;
+		margin-bottom: 0.25rem;
+		text-transform: uppercase;
+		letter-spacing: 0.025em;
+	}
+
+	.precision-badge {
+		font-size: 0.688rem;
+		color: #64748b;
+		font-style: italic;
+		margin-left: 0.25rem;
 	}
 </style>

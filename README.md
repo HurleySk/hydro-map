@@ -1,6 +1,6 @@
 # Hydro-Map
 
-**Version 1.3.0**
+**Version 1.5.0**
 
 An interactive web application for exploring hydrological and geological features, with on-demand watershed delineation, cross-section analysis, and multi-layer visualization.
 
@@ -9,13 +9,14 @@ An interactive web application for exploring hydrological and geological feature
 ### Core Capabilities
 
 - **On-Demand Watershed Delineation**: Click any point on the map to instantly compute the upstream catchment area with detailed statistics.
-- **Water Accumulation Heatmap**: Visualize upslope water accumulation patterns with a blue gradient heatmap showing drainage intensity.
+- **Topographic Wetness Index (TWI)**: Visualize areas prone to water saturation with a blue gradient showing dry to wet areas based on upslope area and slope.
 - **Dual Stream Networks**: Visualize both NHD-based real streams and DEM-derived calculated streams with Strahler order, flow direction, and length attributes.
 - **HUC12 Watershed Boundaries**: Reference layer showing USGS hydrologic unit boundaries with labels.
 - **Terrain Analysis**: Toggle hillshade, slope, aspect, and contour visualizations derived from the DEM.
-- **Cross-Section Tool**: Draw a line to generate elevation profiles along any transect.
-- **Feature Queries**: Inspect stream attributes at clicked locations using the Feature Info panel.
-- **Dynamic Legend**: Color gradient legend that appears when water accumulation layer is active.
+- **Cross-Section Tool**: Draw a line to generate elevation profiles with distance metrics, sample counts, and geology contact totals.
+- **Feature Queries**: Inspect stream and geology attributes with an adjustable search buffer and structured warnings for data limitations.
+- **Dataset Health Monitoring**: API endpoint (`/api/feature-info/status`) for checking data availability and integrity of all datasets.
+- **Dynamic Legends**: Auto-display legends for TWI and geology layers, synced with layer visibility and opacity.
 - **Tile Health Monitoring**: Built-in tile status panel reports coverage, reachability, and max zoom for every PMTiles source.
 - **Colorblind Accessible**: Geology layer features distinct texture patterns alongside colors for red/green colorblind users.
 
@@ -122,12 +123,16 @@ Results are cached by location for fast repeated queries.
 ### Layer Controls
 
 - **Map Layers panel**: Toggle visibility and adjust opacity for terrain, streams, contours, HUC12 boundaries
-- **Terrain group**: Hillshade, slope, aspect
-- **Hydrology group**: Real streams (NHD), calculated streams (DEM-derived), HUC12 boundaries
+- **Terrain group**: Hillshade, slope, aspect, contours
+- **Hydrology group**: Real streams (NHD), calculated streams (DEM-derived), Topographic Wetness Index
+- **Reference group**: HUC12 boundaries, geology
 
 ### Feature Information
 
-Click **Feature Info** mode and click the map to inspect nearby stream attributes (name, Strahler order, length).
+Click **Feature Info** mode and click the map to inspect nearby features:
+- **Streams**: Name, Strahler order, length, flow direction
+- **Geology**: Rock type, formation, age
+- **DEM Samples**: Elevation, slope, aspect, TWI at clicked location
 
 ### Tile Status
 
@@ -142,7 +147,8 @@ See [docs/API.md](docs/API.md) for complete API documentation with schemas and e
 - `POST /api/delineate` - Watershed delineation with optional stream snapping
 - `GET /api/delineate/status` - Check data file availability
 - `POST /api/cross-section` - Generate elevation profiles
-- `POST /api/feature-info` - Query stream/geology attributes
+- `POST /api/feature-info` - Query stream/geology/spring attributes
+- `GET /api/feature-info/status` - Dataset health check with metadata
 - `GET /tiles/{filename}` - PMTiles serving with range request support
 
 ## Configuration

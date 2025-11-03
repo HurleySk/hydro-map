@@ -1,6 +1,6 @@
 # API Reference
 
-**Version**: 1.3.0
+**Version**: 1.5.0
 
 ## Overview
 
@@ -835,12 +835,13 @@ try {
 
 ## API Versioning
 
-**Current version**: 1.2.1 (no API versioning in URL)
+**Current version**: 1.5.0 (no API versioning in URL)
 
 Future versions may implement URL-based versioning (e.g., `/api/v2/delineate`) for breaking changes. The current API is considered stable for the 1.x release series.
 
 ## Changelog
 
+- **v1.5.0** (2025-11-04): Cross-section responses include geology contact counts; Feature Info defaults adjusted to query geology automatically
 - **v1.2.1** (2025-11-02): Documentation improvements
 - **v1.2.0** (2025-11-01): No API changes (frontend refactor only)
 - **v1.1.1** (2025-10-31): Dual stream support (NHD + DEM-derived)

@@ -49,8 +49,14 @@ from lib.tools import ensure_tools_available, RASTER_TOOLS, VECTOR_TOOLS, PMTILE
 @click.option(
     '--max-zoom',
     type=int,
-    default=17,
-    help='Maximum zoom level'
+    default=19,
+    help='Maximum zoom level (default: 19 for 1m DEM)'
+)
+@click.option(
+    '--tile-size',
+    type=int,
+    default=512,
+    help='Tile size in pixels (default: 512)'
 )
 @click.option(
     '--contour-interval',
@@ -61,15 +67,15 @@ from lib.tools import ensure_tools_available, RASTER_TOOLS, VECTOR_TOOLS, PMTILE
 @click.option(
     '--raster-resampling',
     type=click.Choice(['nearest', 'bilinear', 'cubic', 'lanczos'], case_sensitive=False),
-    default='lanczos',
-    help='Resampling kernel for raster tiles (default: lanczos)'
+    default='cubic',
+    help='Resampling kernel for raster tiles (default: cubic)'
 )
 @click.option(
     '--check-tools',
     is_flag=True,
     help='Check required tools and exit'
 )
-def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval, raster_resampling, check_tools):
+def main(data_dir, output_dir, min_zoom, max_zoom, tile_size, contour_interval, raster_resampling, check_tools):
     """Generate PMTiles from processed data."""
 
     # Define all required tools
@@ -102,6 +108,7 @@ def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval, raster_resa
     click.echo(f"Data directory: {data_path}")
     click.echo(f"Output directory: {output_path}")
     click.echo(f"Zoom levels: {min_zoom}-{max_zoom}")
+    click.echo(f"Tile size: {tile_size}px")
     click.echo(f"Raster resampling: {raster_resampling}")
 
     # Raster tiles (hillshade, slope, aspect)
@@ -114,10 +121,10 @@ def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval, raster_resa
     for name, raster_file in raster_files.items():
         if raster_file.exists():
             click.echo(f"\nProcessing {name}...")
-            # Use nearest for categorical rasters like aspect to avoid color bleeding
+            # Use nearest for aspect (color-relief) to avoid blending colors
             effective_resampling = raster_resampling
-            if name == 'aspect' and raster_resampling.lower() == 'lanczos':
-                click.echo("  Aspect is categorical; overriding resampling to 'nearest' for cleaner tiles")
+            if name == 'aspect' and raster_resampling.lower() in ['lanczos', 'cubic', 'bilinear']:
+                click.echo("  Aspect is color-relief categorical; overriding resampling to 'nearest' for clean color boundaries")
                 effective_resampling = 'nearest'
 
             generate_raster_pmtiles(
@@ -125,6 +132,7 @@ def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval, raster_resa
                 output_path / f"{name}.pmtiles",
                 min_zoom,
                 max_zoom,
+                tile_size,
                 effective_resampling
             )
         else:
@@ -176,64 +184,56 @@ def main(data_dir, output_dir, min_zoom, max_zoom, contour_interval, raster_resa
     click.echo("\nTile generation complete!")
 
 
-def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, max_zoom: int, raster_resampling: str):
+def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, max_zoom: int, tile_size: int, raster_resampling: str):
     """Generate PMTiles from raster data."""
 
     temp_dir = output_file.parent / 'temp_tiles'
     temp_dir.mkdir(exist_ok=True)
 
     try:
-        # Step 1: Convert to web-friendly format (8-bit, LZW)
+        # Step 1: Convert to web-friendly format if needed
+        # Hillshade, slope, and aspect are already prepared by prepare_dem.py
+        # Hillshade: Byte, 0-255 (multi-directional)
+        # Slope: Byte, 0-255 (scaled 0-45 degrees)
+        # Aspect: RGB color-relief (no conversion needed)
+
         temp_tif = temp_dir / f"{input_file.stem}_web.tif"
-        click.echo(f"  Converting to web format...")
 
-        # Different handling for different raster types
-        gdal_cmd = [
-            'gdal_translate',
-            '-of', 'GTiff',
-            '-co', 'TILED=YES',
-            '-co', 'COMPRESS=LZW',
-        ]
-
-        # Check the input file name to determine handling
-        if 'hillshade' in input_file.stem:
-            # Hillshade is already 0-255, no scaling needed
-            gdal_cmd.extend([
+        # Check if aspect is color-relief (RGB) - skip conversion
+        if 'aspect' in input_file.stem:
+            # Aspect is color-relief RGB from prepare_dem.py, use directly
+            click.echo(f"  Using color-relief aspect (RGB) directly...")
+            temp_tif = input_file  # Use original file
+        elif 'hillshade' in input_file.stem or 'slope' in input_file.stem:
+            # Hillshade and slope are already Byte from prepare_dem.py
+            # Just ensure proper tiling and compression
+            click.echo(f"  Optimizing for tiling...")
+            subprocess.run([
+                'gdal_translate',
+                '-of', 'GTiff',
+                '-co', 'TILED=YES',
+                '-co', 'COMPRESS=LZW',
                 '-ot', 'Byte',
                 str(input_file),
                 str(temp_tif)
-            ])
-        elif 'aspect' in input_file.stem:
-            # Aspect needs special handling for 0-360 degrees
-            # Scale from 0-360 to 0-255 for visualization
-            gdal_cmd.extend([
-                '-scale', '0', '360', '0', '255',
-                '-ot', 'Byte',
-                str(input_file),
-                str(temp_tif)
-            ])
-        elif 'slope' in input_file.stem:
-            # Slope: scale from actual min/max to 0-255
-            gdal_cmd.extend([
-                '-scale',
-                '-ot', 'Byte',
-                str(input_file),
-                str(temp_tif)
-            ])
+            ], check=True, capture_output=True)
         else:
-            # Default: auto-scale to 0-255
-            gdal_cmd.extend([
+            # Fallback for other rasters (legacy support)
+            click.echo(f"  Converting to web format...")
+            subprocess.run([
+                'gdal_translate',
+                '-of', 'GTiff',
+                '-co', 'TILED=YES',
+                '-co', 'COMPRESS=LZW',
                 '-scale',
                 '-ot', 'Byte',
                 str(input_file),
                 str(temp_tif)
-            ])
-
-        subprocess.run(gdal_cmd, check=True, capture_output=True)
+            ], check=True, capture_output=True)
 
         # Step 2: Generate XYZ tiles
         xyz_dir = temp_dir / f"{input_file.stem}_xyz"
-        click.echo(f"  Generating XYZ tiles (zoom {min_zoom}-{max_zoom})...")
+        click.echo(f"  Generating XYZ tiles (zoom {min_zoom}-{max_zoom}, {tile_size}px)...")
 
         # Map 'nearest' to 'near' for gdal2tiles.py compatibility
         gdal2tiles_resampling = 'near' if raster_resampling == 'nearest' else raster_resampling
@@ -242,6 +242,7 @@ def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, 
             'gdal2tiles.py',
             '--xyz',  # Use XYZ tile numbering (OSM Slippy Map) instead of TMS
             '--zoom', f'{min_zoom}-{max_zoom}',
+            '--tilesize', str(tile_size),
             '--processes', '4',
             '--webviewer', 'none',
             '-r', gdal2tiles_resampling,
@@ -283,7 +284,7 @@ def generate_raster_pmtiles(input_file: Path, output_file: Path, min_zoom: int, 
 
         # Clean up temporary files
         import shutil
-        if temp_tif.exists():
+        if temp_tif.exists() and temp_tif != input_file:
             temp_tif.unlink()
         if temp_mbtiles.exists():
             temp_mbtiles.unlink()

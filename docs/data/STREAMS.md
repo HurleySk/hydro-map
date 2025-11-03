@@ -1,6 +1,6 @@
 # Stream Network Data
 
-**Version**: 1.3.0
+**Version**: 1.5.0
 
 ## Overview
 
@@ -440,9 +440,11 @@ See `scripts/workflow_pure_dem_streams.sh` for the full automated pipeline.
 
 ## Updates and Versioning
 
-**Current version**: 1.2.1 (Dual stream network support)
+**Current version**: 1.5.0 (Feature Info fallback ensures stream attributes are always available)
 
 **Stream network evolution**:
+- **v1.5.0 (2025-11)**: Feature Info tool now falls back to Real Streams when stream layers are hidden
+- **v1.4.0 (2025-11)**: Documentation alignment with Hydro-Map v1.4.0; no pipeline changes
 - **v1.1.1+ (2025-11)**: Dual stream network - DEM-derived AND NHD-based layers available simultaneously
 - **v1.0 (2025-11)**: Pure DEM implementation with multi-threshold extraction, artifact filtering, and confidence scoring
 - **v0.x (2024-2025)**: NHD-based approach only (US only)
