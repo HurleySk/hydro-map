@@ -50,16 +50,16 @@ function createPersistedStore<T>(key: string, defaultValue: T) {
 // Layer visibility and opacity - using centralized configuration
 const initialLayerState = getInitialLayerState();
 
-// Add the special HUC12 sub-layers (fill, outline, labels) that are managed separately
-// These inherit visibility from the main huc12 layer
-const layersWithHuc12Sublayers = {
+// Add the special Fairfax watersheds sub-layers (fill, outline, labels) that are managed separately
+// These inherit visibility from the main fairfax-watersheds layer
+const layersWithWatershedsSublayers = {
 	...initialLayerState,
-	'huc12-fill': { visible: initialLayerState.huc12?.visible ?? false, opacity: 1.0 },
-	'huc12-outline': { visible: initialLayerState.huc12?.visible ?? false, opacity: 1.0 },
-	'huc12-labels': { visible: initialLayerState.huc12?.visible ?? false, opacity: 1.0 },
+	'fairfax-watersheds-fill': { visible: initialLayerState['fairfax-watersheds']?.visible ?? false, opacity: 1.0 },
+	'fairfax-watersheds-outline': { visible: initialLayerState['fairfax-watersheds']?.visible ?? false, opacity: 1.0 },
+	'fairfax-watersheds-labels': { visible: initialLayerState['fairfax-watersheds']?.visible ?? false, opacity: 1.0 },
 };
 
-export const layers = writable<LayersState>(layersWithHuc12Sublayers);
+export const layers = writable<LayersState>(layersWithWatershedsSublayers);
 
 // Active tool
 export const activeTool = writable<Tool>('none');

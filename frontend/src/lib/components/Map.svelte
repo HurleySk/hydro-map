@@ -22,7 +22,14 @@ import {
 import { LAYER_SOURCES, getLayerPMTilesUrl } from '$lib/config/layers';
 import { getApiUrl, apiPost } from '$lib/api/config';
 import { mapLogger as logger } from '$lib/utils/logger';
-import { generatePattern, geologyPatterns, type GeologyType } from '$lib/utils/patterns';
+import {
+	generatePattern,
+	geologyPatterns,
+	type GeologyType,
+	generateOutfallPattern,
+	outfallPatterns,
+	type OutfallDeterminationType
+} from '$lib/utils/patterns';
 
 	const dispatch = createEventDispatcher();
 
@@ -379,60 +386,37 @@ function headerToBounds(header: any): TileHeaderBounds {
 
 		// Build layers from LAYER_SOURCES configuration
 		for (const layer of LAYER_SOURCES) {
-			if (layer.id === 'huc12') {
-				// Special handling for HUC12 with its 3 sub-layers
+			if (layer.id === 'fairfax-watersheds') {
+				// Special handling for Fairfax watersheds with its 3 sub-layers
 				configuredLayers.push(
 					{
-						id: 'huc12-fill',
+						id: 'fairfax-watersheds-fill',
 						type: 'fill',
-						source: 'huc12',
-						'source-layer': 'huc12',
+						source: 'fairfax-watersheds',
+						'source-layer': 'fairfax_watersheds',
 						layout: { visibility: 'none' },
 						paint: {
-							'fill-color': [
-								'match',
-								['get', 'name'],
-								'Accotink Creek', '#fbbf24',           // Amber/Yellow
-								'Fourmile Run-Potomac River', '#a78bfa', // Purple
-								'Cameron Run', '#60a5fa',               // Blue
-								'Pohick Creek', '#34d399',              // Green
-								'#fbbf24' // fallback
-							],
-							'fill-opacity': 0.2
+							'fill-color': '#6b7280',
+							'fill-opacity': 0.3
 						}
 					},
 					{
-						id: 'huc12-outline',
+						id: 'fairfax-watersheds-outline',
 						type: 'line',
-						source: 'huc12',
-						'source-layer': 'huc12',
+						source: 'fairfax-watersheds',
+						'source-layer': 'fairfax_watersheds',
 						layout: { visibility: 'none' },
 						paint: {
-							'line-color': [
-								'match',
-								['get', 'name'],
-								'Accotink Creek', '#f59e0b',           // Darker Amber/Orange
-								'Fourmile Run-Potomac River', '#8b5cf6', // Darker Purple
-								'Cameron Run', '#3b82f6',               // Darker Blue
-								'Pohick Creek', '#10b981',              // Darker Green
-								'#f59e0b' // fallback
-							],
-							'line-width': [
-								'interpolate',
-								['linear'],
-								['zoom'],
-								8, 1.5,
-								14, 2.5,
-								17, 3.5
-							],
-							'line-opacity': 0.8
+							'line-color': '#374151',
+							'line-width': 2,
+							'line-opacity': 0.9
 						}
 					},
 					{
-						id: 'huc12-labels',
+						id: 'fairfax-watersheds-labels',
 						type: 'symbol',
-						source: 'huc12',
-						'source-layer': 'huc12',
+						source: 'fairfax-watersheds',
+						'source-layer': 'fairfax_watersheds',
 						minzoom: 11,
 						layout: {
 							visibility: 'none',
@@ -442,24 +426,16 @@ function headerToBounds(header: any): TileHeaderBounds {
 								'interpolate',
 								['linear'],
 								['zoom'],
-								11, 13,
-								14, 16,
-								17, 20
+								11, 12,
+								14, 15,
+								17, 18
 							],
-							'text-allow-overlap': true
+							'text-allow-overlap': false
 						},
 						paint: {
-							'text-color': [
-								'match',
-								['get', 'name'],
-								'Accotink Creek', '#b45309',
-								'Fourmile Run-Potomac River', '#6d28d9',
-								'Cameron Run', '#1e40af',
-								'Pohick Creek', '#047857',
-								'#1f2937'
-							],
+							'text-color': '#1f2937',
 							'text-halo-color': '#ffffff',
-							'text-halo-width': 2.5
+							'text-halo-width': 2
 						}
 					}
 				);
@@ -518,11 +494,52 @@ function headerToBounds(header: any): TileHeaderBounds {
 						'fill-outline-color': layer.paintProperties?.['fill-outline-color'] || '#075985'
 					}
 				});
+			} else if (layer.id === 'inadequate-outfalls') {
+				// Special handling for inadequate outfalls layer (fill + outline)
+				configuredLayers.push(
+					{
+						id: 'inadequate-outfalls-fill',
+						type: 'fill',
+						source: 'inadequate-outfalls',
+						'source-layer': 'inadequate_outfalls',
+						layout: { visibility: layer.defaultVisible ? 'visible' : 'none' },
+						paint: {
+							'fill-pattern': layer.paintProperties?.['fill-pattern'],
+							'fill-opacity': layer.paintProperties?.['fill-opacity'] || 0.6
+						}
+					},
+					{
+						id: 'inadequate-outfalls-outline',
+						type: 'line',
+						source: 'inadequate-outfalls',
+						'source-layer': 'inadequate_outfalls',
+						layout: { visibility: layer.defaultVisible ? 'visible' : 'none' },
+						paint: {
+							'line-color': layer.paintProperties?.['line-color'],
+							'line-width': layer.paintProperties?.['line-width'] || 0.75,
+							'line-opacity': layer.paintProperties?.['line-opacity'] || 0.8
+						}
+					}
+				);
 			} else {
 				// Standard layer from configuration
+				// Detect layer type from paint properties
+				let layerType = 'line'; // default
+				if (layer.type === 'raster') {
+					layerType = 'raster';
+				} else if (layer.type === 'vector' && layer.paintProperties) {
+					// Check paint properties to determine vector layer type
+					const paintKeys = Object.keys(layer.paintProperties);
+					if (paintKeys.some(k => k.startsWith('circle-'))) {
+						layerType = 'circle';
+					} else if (paintKeys.some(k => k.startsWith('fill-'))) {
+						layerType = 'fill';
+					}
+				}
+
 				const mapLayer: any = {
 					id: layer.id,
-					type: layer.type === 'raster' ? 'raster' : 'line', // default to line for vectors
+					type: layerType,
 					source: layer.id,
 					layout: {
 						visibility: layer.defaultVisible ? 'visible' : 'none'
@@ -593,6 +610,22 @@ function headerToBounds(header: any): TileHeaderBounds {
 			const color = geologyPatterns[type];
 			const pattern = generatePattern(type, color);
 			map.addImage(`pattern-${type}`, pattern);
+		}
+
+		// Load inadequate outfall patterns for colorblind accessibility
+		const outfallTypes: OutfallDeterminationType[] = [
+			'erosion',
+			'vertical-erosion',
+			'left-bank-unstable',
+			'right-bank-unstable',
+			'both-banks-unstable',
+			'habitat-score'
+		];
+
+		for (const type of outfallTypes) {
+			const color = outfallPatterns[type];
+			const pattern = generateOutfallPattern(type, color);
+			map.addImage(`pattern-outfall-${type}`, pattern);
 		}
 
 		// Add custom layers
@@ -782,12 +815,16 @@ function headerToBounds(header: any): TileHeaderBounds {
 		const pendingLayers: string[] = [];
 
 		Object.entries(layersState).forEach(([layerId, config]: [string, any]) => {
-			// Skip huc12-fill and huc12-labels - they're controlled by huc12-outline
-			if (layerId === 'huc12-fill' || layerId === 'huc12-labels') {
+			// Skip fairfax-watersheds-fill and fairfax-watersheds-labels - they're controlled by fairfax-watersheds-outline
+			if (layerId === 'fairfax-watersheds-fill' || layerId === 'fairfax-watersheds-labels') {
 				return;
 			}
 			// Skip geology-fill and geology-outline as they're controlled by 'geology'
 			if (layerId === 'geology-fill' || layerId === 'geology-outline') {
+				return;
+			}
+			// Skip inadequate-outfalls-fill and inadequate-outfalls-outline as they're controlled by 'inadequate-outfalls'
+			if (layerId === 'inadequate-outfalls-fill' || layerId === 'inadequate-outfalls-outline') {
 				return;
 			}
 
@@ -814,24 +851,50 @@ function headerToBounds(header: any): TileHeaderBounds {
 				return;
 			}
 
-			if (layerId === 'huc12') {
+			if (layerId === 'inadequate-outfalls') {
 				const newVisibility = config.visible ? 'visible' : 'none';
-				logger.log(`[applyLayerState] Setting HUC12 layers visibility to ${newVisibility}`);
+				logger.log(`[applyLayerState] Setting inadequate outfalls layers visibility to ${newVisibility}`);
 
-				const huc12Fill = map.getLayer('huc12-fill');
-				const huc12Outline = map.getLayer('huc12-outline');
-				const huc12Labels = map.getLayer('huc12-labels');
+				const outfallsFill = map.getLayer('inadequate-outfalls-fill');
+				const outfallsOutline = map.getLayer('inadequate-outfalls-outline');
 
-				if (huc12Outline) {
-					map.setLayoutProperty('huc12-outline', 'visibility', newVisibility);
+				if (outfallsFill) {
+					map.setLayoutProperty('inadequate-outfalls-fill', 'visibility', newVisibility);
+					// Apply opacity to fill
+					if (config.visible && config.opacity !== undefined) {
+						map.setPaintProperty('inadequate-outfalls-fill', 'fill-opacity', config.opacity);
+					}
 				} else {
 					pendingLayers.push(layerId);
 				}
-				if (huc12Fill) {
-					map.setLayoutProperty('huc12-fill', 'visibility', newVisibility);
+				if (outfallsOutline) {
+					map.setLayoutProperty('inadequate-outfalls-outline', 'visibility', newVisibility);
+					// Apply opacity to outline
+					if (config.visible && config.opacity !== undefined) {
+						map.setPaintProperty('inadequate-outfalls-outline', 'line-opacity', config.opacity * 0.8);
+					}
 				}
-				if (huc12Labels) {
-					map.setLayoutProperty('huc12-labels', 'visibility', newVisibility);
+				return;
+			}
+
+			if (layerId === 'fairfax-watersheds') {
+				const newVisibility = config.visible ? 'visible' : 'none';
+				logger.log(`[applyLayerState] Setting Fairfax watersheds layers visibility to ${newVisibility}`);
+
+				const watershedsFill = map.getLayer('fairfax-watersheds-fill');
+				const watershedsOutline = map.getLayer('fairfax-watersheds-outline');
+				const watershedsLabels = map.getLayer('fairfax-watersheds-labels');
+
+				if (watershedsOutline) {
+					map.setLayoutProperty('fairfax-watersheds-outline', 'visibility', newVisibility);
+				} else {
+					pendingLayers.push(layerId);
+				}
+				if (watershedsFill) {
+					map.setLayoutProperty('fairfax-watersheds-fill', 'visibility', newVisibility);
+				}
+				if (watershedsLabels) {
+					map.setLayoutProperty('fairfax-watersheds-labels', 'visibility', newVisibility);
 				}
 				return;
 			}
@@ -850,20 +913,39 @@ function headerToBounds(header: any): TileHeaderBounds {
 						map.setPaintProperty(layerId, 'raster-opacity', targetOpacity);
 					}
 
+					// Update opacity for vector layers
+					if (layer.type === 'fill') {
+						const targetOpacity = config.visible ? (config.opacity ?? 1.0) : 0;
+						logger.log(`[applyLayerState] Setting ${layerId} fill-opacity to ${targetOpacity}`);
+						map.setPaintProperty(layerId, 'fill-opacity', targetOpacity);
+					}
+
+					if (layer.type === 'line') {
+						const targetOpacity = config.visible ? (config.opacity ?? 1.0) : 0;
+						logger.log(`[applyLayerState] Setting ${layerId} line-opacity to ${targetOpacity}`);
+						map.setPaintProperty(layerId, 'line-opacity', targetOpacity);
+					}
+
+					if (layer.type === 'circle') {
+						const targetOpacity = config.visible ? (config.opacity ?? 1.0) : 0;
+						logger.log(`[applyLayerState] Setting ${layerId} circle-opacity to ${targetOpacity}`);
+						map.setPaintProperty(layerId, 'circle-opacity', targetOpacity);
+					}
+
 					map.setLayoutProperty(layerId, 'visibility', newVisibility);
 
-					// Special handling: sync HUC12 fill and labels with outline visibility
-					if (layerId === 'huc12-outline') {
-						const huc12Fill = map.getLayer('huc12-fill');
-						const huc12Labels = map.getLayer('huc12-labels');
+					// Special handling: sync Fairfax watersheds fill and labels with outline visibility
+					if (layerId === 'fairfax-watersheds-outline') {
+						const watershedsFill = map.getLayer('fairfax-watersheds-fill');
+						const watershedsLabels = map.getLayer('fairfax-watersheds-labels');
 
-						if (huc12Fill) {
-							logger.log(`[applyLayerState] Syncing huc12-fill visibility to ${newVisibility}`);
-							map.setLayoutProperty('huc12-fill', 'visibility', newVisibility);
+						if (watershedsFill) {
+							logger.log(`[applyLayerState] Syncing fairfax-watersheds-fill visibility to ${newVisibility}`);
+							map.setLayoutProperty('fairfax-watersheds-fill', 'visibility', newVisibility);
 						}
-						if (huc12Labels) {
-							logger.log(`[applyLayerState] Syncing huc12-labels visibility to ${newVisibility}`);
-							map.setLayoutProperty('huc12-labels', 'visibility', newVisibility);
+						if (watershedsLabels) {
+							logger.log(`[applyLayerState] Syncing fairfax-watersheds-labels visibility to ${newVisibility}`);
+							map.setLayoutProperty('fairfax-watersheds-labels', 'visibility', newVisibility);
 						}
 					}
 
@@ -998,7 +1080,7 @@ async function initializeTileStatus() {
 			pmtilesProtocol?.add(pmtiles);
 
 			// Verify vector layer metadata for vector tiles
-			if (src.id === 'contours' || src.id === 'huc12') {
+			if (src.id === 'contours' || src.id === 'fairfax-watersheds') {
 				try {
 					const metadata: any = await pmtiles.getMetadata();
 					if (metadata && metadata.vector_layers) {

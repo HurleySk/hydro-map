@@ -11,6 +11,7 @@ import TileStatusPanel from '$lib/components/TileStatusPanel.svelte';
 import CollapsiblePanel from '$lib/components/CollapsiblePanel.svelte';
 import GeologyLegend from '$lib/components/GeologyLegend.svelte';
 import TWILegend from '$lib/components/TWILegend.svelte';
+import InadequateOutfallsLegend from '$lib/components/InadequateOutfallsLegend.svelte';
 	import { activeTool, panelStates, layers } from '$lib/stores';
 
 	let mapComponent: any;
@@ -107,6 +108,10 @@ import TWILegend from '$lib/components/TWILegend.svelte';
 
 		{#if $layers['geology']?.visible}
 			<GeologyLegend opacity={$layers['geology'].opacity} />
+		{/if}
+
+		{#if $layers['inadequate-outfalls']?.visible}
+			<InadequateOutfallsLegend opacity={$layers['inadequate-outfalls'].opacity} />
 		{/if}
 	</main>
 </div>

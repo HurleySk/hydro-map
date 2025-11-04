@@ -209,15 +209,18 @@
 			</div>
 		{/if}
 
-		{#if features.huc12}
+		{#if features.fairfax_watersheds}
 			<div class="feature-group">
 				<h4>Watershed</h4>
 				<div class="feature-item">
-					<div class="feature-name">{features.huc12.name}</div>
-					<div class="feature-attr">HUC12: {features.huc12.huc12}</div>
-					<div class="feature-attr">Area: {features.huc12.area_sqkm.toFixed(2)} km²</div>
-					{#if features.huc12.states}
-						<div class="feature-attr">States: {features.huc12.states}</div>
+					<div class="feature-name">{features.fairfax_watersheds.name}</div>
+					{#if features.fairfax_watersheds.area_sqkm}
+						<div class="feature-attr">Area: {features.fairfax_watersheds.area_sqkm.toFixed(2)} km²</div>
+					{/if}
+					{#if features.fairfax_watersheds.web_address}
+						<div class="feature-attr">
+							<a href="{features.fairfax_watersheds.web_address}" target="_blank" rel="noopener noreferrer">More info</a>
+						</div>
 					{/if}
 				</div>
 			</div>

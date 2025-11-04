@@ -1,6 +1,6 @@
 # Hydro-Map
 
-**Version 1.7.0**
+**Version 1.9.0**
 
 An interactive web application for exploring hydrological and geological features, with on-demand watershed delineation, cross-section analysis, and multi-layer visualization.
 
@@ -11,7 +11,8 @@ An interactive web application for exploring hydrological and geological feature
 - **On-Demand Watershed Delineation**: Click any point on the map to instantly compute the upstream catchment area with detailed statistics.
 - **Topographic Wetness Index (TWI)**: Visualize areas prone to water saturation with a blue gradient showing dry to wet areas based on upslope area and slope.
 - **Fairfax Water Layers**: Toggle dedicated Fairfax County line and polygon hydro datasets plus a perennial stream network derived from local open data.
-- **HUC12 Watershed Boundaries**: Reference layer showing USGS hydrologic unit boundaries with labels.
+- **Fairfax County Watersheds**: Local watershed boundaries (30 units) from Fairfax County GIS with names and additional information.
+- **Fairfax Stormwater & Flood Risk**: Three overlay layers showing floodplain easements, inadequate outfall drainage areas, and problem outfall locations for stormwater planning.
 - **Terrain Analysis**: Toggle hillshade, slope, aspect, and contour visualizations derived from the DEM.
 - **Cross-Section Tool**: Draw a line to generate elevation profiles with distance metrics, sample counts, and geology contact totals.
 - **Feature Queries**: Inspect geology context, watershed membership, and DEM samples with an adjustable search buffer and structured warnings for data limitations.
@@ -127,14 +128,14 @@ Results are cached by location for fast repeated queries.
 
 - **Map Layers panel**: Toggle visibility and adjust opacity for terrain, Fairfax hydrology, contours, and reference overlays
 - **Terrain group**: Hillshade, slope, aspect, contours
-- **Hydrology group**: Topographic Wetness Index, Fairfax water features (lines/polygons), Fairfax perennial streams
-- **Reference group**: HUC12 boundaries, geology
+- **Hydrology group**: Topographic Wetness Index, Fairfax water features (lines/polygons), Fairfax perennial streams, Floodplain Easements, Inadequate Outfalls, Inadequate Outfall Points
+- **Reference group**: Fairfax County watersheds, geology
 
 ### Feature Information
 
 Click **Feature Info** mode and click the map to inspect nearby features:
 - **Geology**: Rock type, formation, age, and data source
-- **Watershed context**: HUC12 identifier, name, and area (if available)
+- **Watershed context**: Fairfax County watershed name, area, and web link (if available)
 - **DEM Samples**: Elevation, slope, aspect, TWI at the clicked location
 
 ### Tile Status
@@ -172,7 +173,7 @@ See [docs/CONFIGURATION.md](docs/CONFIGURATION.md) for complete configuration re
 - **DEM (US)**: [USGS 3DEP 10m](https://www.usgs.gov/3d-elevation-program)
 - **DEM (Global)**: [Copernicus GLO-30](https://spacedata.copernicus.eu/collections/copernicus-digital-elevation-model)
 - **Streams (US)**: [NHD/NHDPlus](https://www.usgs.gov/national-hydrography/national-hydrography-dataset)
-- **Watersheds (US)**: [USGS WBD/HUC12](https://www.usgs.gov/national-hydrography/watershed-boundary-dataset)
+- **Watersheds (Fairfax County)**: [Fairfax County GIS Open Data](https://data-fairfaxcountygis.opendata.arcgis.com)
 
 ### Processing Tools
 
@@ -225,7 +226,7 @@ See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) for comprehensive trouble
 
 - [Architecture Guide](docs/ARCHITECTURE.md) - Detailed component hierarchy and data flow
 - [Quick Start Guide](docs/QUICK_START.md) - Step-by-step installation and setup
-- [Data Preparation](docs/DATA_PREPARATION.md) - Complete workflows for DEM, streams, HUC12
+- [Data Preparation](docs/DATA_PREPARATION.md) - Complete workflows for DEM, streams, Fairfax datasets
 - [API Reference](docs/API.md) - Complete API documentation with schemas
 - [UI Guide](docs/UI_GUIDE.md) - Frontend features and usage
 - [Configuration](docs/CONFIGURATION.md) - Environment variables and settings

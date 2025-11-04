@@ -17,13 +17,13 @@ class Settings(BaseSettings):
     FLOW_DIR_PATH: str = "../data/processed/dem/flow_direction.tif"
     FLOW_ACC_PATH: str = "../data/processed/dem/flow_accumulation.tif"
     GEOLOGY_PATH: str = "../data/processed/geology.gpkg"
-    HUC12_PATH: str = "../data/processed/huc12.gpkg"
+    FAIRFAX_WATERSHEDS_PATH: str = "../data/processed/fairfax_watersheds.gpkg"
 
     # Dataset mapping for logical layer names to file paths
     # Maps frontend layer IDs to (file_path, layer_name) tuples
     LAYER_DATASET_MAP: dict = {
         "geology": ("../data/processed/geology.gpkg", None),
-        "huc12": ("../data/processed/huc12.gpkg", None),
+        "fairfax-watersheds": ("../data/processed/fairfax_watersheds.gpkg", "fairfax_watersheds"),
         "fairfax-water-lines": ("../data/processed/fairfax_water_lines.gpkg", "fairfax_water_lines"),
         "fairfax-water-polys": ("../data/processed/fairfax_water_polys.gpkg", "fairfax_water_polys")
     }

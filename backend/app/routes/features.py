@@ -198,11 +198,11 @@ async def get_feature_info(request: FeatureInfoRequest):
         if geology_features:
             features["geology"] = geology_features
 
-    # Query HUC12 watershed (always query - provides useful context)
-    huc12_data, warnings = await query_huc12(point)
+    # Query Fairfax watersheds (always query - provides useful context)
+    watersheds_data, warnings = await query_fairfax_watersheds(point)
     all_warnings.extend(warnings)
-    if huc12_data:
-        features["huc12"] = huc12_data
+    if watersheds_data:
+        features["fairfax_watersheds"] = watersheds_data
 
     # Sample DEM rasters (always sample - provides useful context)
     dem_data, warnings = sample_dem_rasters(request.lon, request.lat)
@@ -224,7 +224,7 @@ async def get_feature_info(request: FeatureInfoRequest):
             "datasets": list(set([
                 "streams_nhd" if "streams" in features else None,
                 "geology" if "geology" in features else None,
-                "huc12" if "huc12" in features else None,
+                "fairfax_watersheds" if "fairfax_watersheds" in features else None,
                 "dem" if "dem_samples" in features else None
             ]) - {None})
         }
@@ -342,42 +342,42 @@ async def query_streams(
         return None, warnings
 
 
-async def query_huc12(point: Point) -> tuple[Optional[Dict], List[Dict]]:
+async def query_fairfax_watersheds(point: Point) -> tuple[Optional[Dict], List[Dict]]:
     """
-    Query HUC12 watershed containing a point.
+    Query Fairfax County watershed containing a point.
 
     Args:
         point: Shapely Point in WGS84
 
     Returns:
-        Tuple of (dictionary with HUC12 watershed info or None, list of warnings)
+        Tuple of (dictionary with Fairfax watershed info or None, list of warnings)
     """
     warnings = []
-    huc12_path = Path(settings.HUC12_PATH)
+    watersheds_path = Path(settings.FAIRFAX_WATERSHEDS_PATH)
 
-    if not huc12_path.exists():
-        warning_msg = f"HUC12 dataset not found at {huc12_path}"
+    if not watersheds_path.exists():
+        warning_msg = f"Fairfax watersheds dataset not found at {watersheds_path}"
         print(f"Warning: {warning_msg}")
-        warnings.append({"level": "error", "message": warning_msg, "source": "query_huc12"})
+        warnings.append({"level": "error", "message": warning_msg, "source": "query_fairfax_watersheds"})
         return None, warnings
 
     try:
-        # Read HUC12 (with caching)
-        huc12_gdf = _load_dataset_cached(str(huc12_path))
-        if huc12_gdf is None:
-            warnings.append({"level": "error", "message": "Failed to load HUC12 dataset", "source": "query_huc12"})
+        # Read Fairfax watersheds (with caching)
+        watersheds_gdf = _load_dataset_cached(str(watersheds_path))
+        if watersheds_gdf is None:
+            warnings.append({"level": "error", "message": "Failed to load Fairfax watersheds dataset", "source": "query_fairfax_watersheds"})
             return None, warnings
 
         # Ensure same CRS
-        if huc12_gdf.crs != "EPSG:4326":
-            huc12_gdf = huc12_gdf.to_crs("EPSG:4326")
+        if watersheds_gdf.crs != "EPSG:4326":
+            watersheds_gdf = watersheds_gdf.to_crs("EPSG:4326")
 
         # Use spatial index to prefilter candidates
-        if hasattr(huc12_gdf, 'sindex') and huc12_gdf.sindex is not None:
-            possible_matches_idx = list(huc12_gdf.sindex.intersection(point.bounds))
-            candidates = huc12_gdf.iloc[possible_matches_idx]
+        if hasattr(watersheds_gdf, 'sindex') and watersheds_gdf.sindex is not None:
+            possible_matches_idx = list(watersheds_gdf.sindex.intersection(point.bounds))
+            candidates = watersheds_gdf.iloc[possible_matches_idx]
         else:
-            candidates = huc12_gdf
+            candidates = watersheds_gdf
 
         # Find containing watershed (point can only be in one)
         containing = candidates[candidates.contains(point)]
@@ -387,19 +387,18 @@ async def query_huc12(point: Point) -> tuple[Optional[Dict], List[Dict]]:
             row = containing.iloc[0]
 
             return {
-                "huc12": str(row['huc12']),
                 "name": str(row['name']),
-                "area_sqkm": float(row['area_sqkm']),
-                "states": str(row['states']) if 'states' in row else None
+                "area_sqkm": float(row['area_sqkm']) if 'area_sqkm' in row else None,
+                "web_address": str(row['web_address']) if 'web_address' in row else None
             }, warnings
 
-        warnings.append({"level": "info", "message": "Point not within any HUC12 watershed", "source": "query_huc12"})
+        warnings.append({"level": "info", "message": "Point not within any Fairfax County watershed", "source": "query_fairfax_watersheds"})
         return None, warnings
 
     except Exception as e:
-        warning_msg = f"Failed to query HUC12: {e}"
+        warning_msg = f"Failed to query Fairfax watersheds: {e}"
         print(f"Warning: {warning_msg}")
-        warnings.append({"level": "error", "message": warning_msg, "source": "query_huc12"})
+        warnings.append({"level": "error", "message": warning_msg, "source": "query_fairfax_watersheds"})
         return None, warnings
 
 

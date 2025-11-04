@@ -4,8 +4,8 @@
 
 	const layerGroups: Record<string, string[]> = {
 		'Terrain': ['hillshade', 'slope', 'aspect', 'contours'],
-		'Hydrology': ['twi', 'fairfax-water-lines', 'fairfax-water-polys', 'perennial-streams'],
-		'Reference': ['huc12-outline', 'geology']
+		'Hydrology': ['twi', 'fairfax-water-lines', 'fairfax-water-polys', 'perennial-streams', 'floodplain-easements', 'inadequate-outfalls', 'inadequate-outfall-points'],
+		'Reference': ['fairfax-watersheds-outline', 'geology']
 	};
 
 	const layerNames: Record<string, string> = {
@@ -15,10 +15,13 @@
 		'twi': 'Topographic Wetness Index',
 		geology: 'Geology',
 		contours: 'Contours',
-		'huc12-outline': 'HUC12 Watersheds',
+		'fairfax-watersheds-outline': 'Fairfax Watersheds',
 		'fairfax-water-lines': 'Fairfax Water Features (Lines)',
 		'fairfax-water-polys': 'Fairfax Water Features (Polygons)',
-		'perennial-streams': 'Fairfax Perennial Streams'
+		'perennial-streams': 'Fairfax Perennial Streams',
+		'floodplain-easements': 'Floodplain Easements',
+		'inadequate-outfalls': 'Inadequate Outfalls',
+		'inadequate-outfall-points': 'Inadequate Outfall Points'
 	};
 
 	function toggleLayer(layerId: string) {

@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+"""
+Download Fairfax County stormwater and flood risk datasets via ArcGIS REST API.
+
+Downloads Floodplain Easements, Inadequate Outfalls, and Outfall Pour Points
+from Fairfax County Open Data. Reprojects to WGS84 and clips to AOI bounding box.
+
+Usage:
+    python download_fairfax_stormwater.py
+"""
+
+import subprocess
+from pathlib import Path
+import sys
+
+# Paths
+DATA_DIR = Path(__file__).parent.parent / "data" / "raw" / "fairfax"
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+
+# AOI bounding box (WGS84): Northern Virginia focus area
+# Approximate extent covering Fairfax County
+AOI_BBOX = (-77.5, 38.6, -76.9, 39.0)  # minx, miny, maxx, maxy
+
+# Fairfax County ArcGIS REST endpoints
+DATASETS = {
+    "floodplain_easements": {
+        "url": "https://services1.arcgis.com/ioennV6PpG5Xodq0/arcgis/rest/services/Recorded_Floodplain_Easements/FeatureServer/0",
+        "source_crs": "EPSG:3857",  # Web Mercator (from assessment)
+        "fields": ["OBJ_ID_ALIAS"]
+    },
+    "inadequate_outfalls": {
+        "url": "https://services1.arcgis.com/ioennV6PpG5Xodq0/arcgis/rest/services/Inadequate_Outfalls/FeatureServer/0",
+        "source_crs": "EPSG:2283",  # State Plane VA feet (NAD83)
+        "fields": ["INADEQUATE_OUTFALL_ID", "DRAINAGE_AREA", "DETERMINATION", "WATERSHED"]
+    },
+    "inadequate_outfall_points": {
+        "url": "https://services1.arcgis.com/ioennV6PpG5Xodq0/arcgis/rest/services/Inadequate_Outfall_Pour_Points/FeatureServer/0",
+        "source_crs": "EPSG:2283",  # State Plane VA feet (NAD83)
+        "fields": ["INADEQUATE_OUTFALL_ID", "DRAINAGE_AREA", "DETERMINATION", "WATERSHED"]
+    }
+}
+
+
+def download_layer(name: str, config: dict):
+    """
+    Download a single layer using ogr2ogr.
+
+    Args:
+        name: Dataset name (used for output filename)
+        config: Dataset configuration with url, source_crs, fields
+
+    Returns:
+        bool: Success status
+    """
+    output_file = DATA_DIR / f"{name}.gpkg"
+
+    print(f"\n{'='*70}")
+    print(f"Downloading: {name}")
+    print(f"{'='*70}")
+    print(f"Source: {config['url']}")
+    print(f"Output: {output_file}")
+
+    # Build ogr2ogr command
+    cmd = [
+        "ogr2ogr",
+        "-f", "GPKG",
+        str(output_file),
+        config["url"],
+        "-t_srs", "EPSG:4326",  # Target: WGS84
+        "-spat", str(AOI_BBOX[0]), str(AOI_BBOX[1]), str(AOI_BBOX[2]), str(AOI_BBOX[3]),
+        "-spat_srs", "EPSG:4326",  # Spatial filter in WGS84
+        "-progress",
+        "-overwrite"
+    ]
+
+    # Add field selection if specified
+    if config.get("fields"):
+        # Note: ArcGIS REST doesn't support -select, will use all fields
+        # Field filtering will happen in processing script
+        pass
+
+    # Execute download
+    try:
+        print(f"\nExecuting: {' '.join(cmd)}")
+        result = subprocess.run(cmd, check=True, capture_output=True, text=True)
+
+        # Show progress
+        if result.stdout:
+            print(result.stdout)
+
+        # Verify output
+        if output_file.exists():
+            size_mb = output_file.stat().st_size / (1024 * 1024)
+            print(f"\nDownload successful: {output_file.name} ({size_mb:.1f} MB)")
+        else:
+            print(f"\nDownload failed: {output_file.name} not created")
+            return False
+
+    except subprocess.CalledProcessError as e:
+        print(f"\nError downloading {name}:")
+        print(e.stderr)
+        return False
+
+    return True
+
+
+def verify_downloads():
+    """Verify all downloads completed successfully."""
+    print(f"\n{'='*70}")
+    print("VERIFICATION")
+    print(f"{'='*70}")
+
+    all_success = True
+    for name in DATASETS.keys():
+        output_file = DATA_DIR / f"{name}.gpkg"
+        if output_file.exists():
+            size_mb = output_file.stat().st_size / (1024 * 1024)
+            print(f"✓ {name}.gpkg ({size_mb:.1f} MB)")
+        else:
+            print(f"✗ {name}.gpkg (missing)")
+            all_success = False
+
+    return all_success
+
+
+def main():
+    """Download all Fairfax County stormwater datasets."""
+    print(f"\n{'='*70}")
+    print("FAIRFAX COUNTY STORMWATER/FLOOD DOWNLOAD")
+    print(f"{'='*70}")
+    print(f"Output directory: {DATA_DIR}")
+    print(f"AOI bounding box: {AOI_BBOX}")
+    print(f"Datasets: {len(DATASETS)}")
+    print(f"{'='*70}")
+
+    # Download each dataset
+    success_count = 0
+    for name, config in DATASETS.items():
+        if download_layer(name, config):
+            success_count += 1
+
+    # Verify
+    print(f"\n{'='*70}")
+    print(f"DOWNLOAD SUMMARY: {success_count}/{len(DATASETS)} successful")
+    print(f"{'='*70}")
+
+    if verify_downloads():
+        print("\nAll downloads completed successfully")
+        print("\nNext step:")
+        print("  python scripts/prepare_fairfax_stormwater.py")
+        return 0
+    else:
+        print("\nSome downloads failed - check errors above")
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

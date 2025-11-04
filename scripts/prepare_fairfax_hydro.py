@@ -52,6 +52,15 @@ DATASETS = {
             "SOURCE": "source_detail"
         },
         "geometry_type": "LineString"
+    },
+    "fairfax_watersheds": {
+        "input": RAW_DIR / "watersheds.gpkg",
+        "output": PROCESSED_DIR / "fairfax_watersheds.gpkg",
+        "fields_map": {
+            "NAME": "name",
+            "WEB_ADDRESS": "web_address"
+        },
+        "geometry_type": "Polygon"
     }
 }
 

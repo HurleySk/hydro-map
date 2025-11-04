@@ -5,6 +5,46 @@ All notable changes to Hydro-Map are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.9.0] - 2025-11-04
+
+### Added
+- **Fairfax County Stormwater and Flood Risk Layers**: Three new overlay layers for flood risk and stormwater problem areas
+  - **Floodplain Easements** (897 features, 1.6MB PMTiles): Recorded floodplain easements with non-regulatory reference disclaimer
+  - **Inadequate Outfalls** (408 drainage areas, 6.1MB PMTiles): Drainage basins with inadequate stormwater outfalls
+  - **Inadequate Outfall Points** (431 points, 148KB PMTiles): Pour point locations for problem outfalls
+  - All layers hidden by default with toggle control in Hydrology group
+  - Source attribution: Fairfax County GIS Open Data
+  - Zoom range: 8-15 for optimal detail and performance
+- **Processing Pipeline**: New download and processing scripts for stormwater datasets
+  - `scripts/download_fairfax_stormwater.py`: Downloads from ArcGIS REST API with AOI clipping
+  - `scripts/download_arcgis_paginated.py`: Handles large datasets using pagination (50 features/batch)
+  - `scripts/prepare_fairfax_stormwater.py`: Field normalization, reprojection to WGS84, area calculations
+- **Tile Generation**: Integrated stormwater layers into existing tile generation pipeline
+
+### Changed
+- Extended `scripts/generate_tiles.py` to include stormwater/flood vector datasets
+- Updated Layer Panel UI to include new layers in Hydrology group
+- Layer styling: Light blue for floodplain, orange for problem outfalls, red for problem points
+
+## [1.8.0] - 2025-11-04
+
+### Added
+- **Fairfax County Watersheds Layer**: Added local watershed boundaries (30 units) from Fairfax County GIS
+  - Replaces USGS HUC12 watersheds with county-specific watershed data
+  - 891KB PMTiles with zoom levels 8-15
+  - Provides higher precision for local/municipal watershed planning
+  - Source attribution: Fairfax County GIS Open Data
+
+### Removed
+- **HUC12 Watersheds Layer**: Deprecated in favor of Fairfax County watersheds
+  - Removed from UI (LayerPanel, layers.ts configuration)
+  - Deleted huc12.pmtiles and processed data files
+  - Note: Fairfax watersheds provide more relevant local context for the AOI
+
+### Changed
+- Updated tile generation pipeline to include Fairfax watersheds
+- Download and processing scripts extended to support watersheds dataset
+
 ## [1.7.0] - 2025-12-15
 
 ### Added

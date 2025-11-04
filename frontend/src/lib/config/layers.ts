@@ -138,23 +138,23 @@ export const LAYER_SOURCES: LayerSource[] = [
 
   // Reference layers
   {
-    id: 'huc12',
-    label: 'Watersheds (HUC12)',
-    filename: 'huc12.pmtiles',
+    id: 'fairfax-watersheds',
+    label: 'Watersheds (Fairfax County)',
+    filename: 'fairfax_watersheds.pmtiles',
     type: 'vector',
-    vectorLayerId: 'huc12',
+    vectorLayerId: 'fairfax_watersheds',
     defaultVisible: false,
     defaultOpacity: 0.3,
     category: 'reference',
-    description: '12-digit Hydrologic Unit Code watersheds',
+    description: 'Fairfax County local watersheds (30 watershed units). Source: Fairfax County GIS',
     paintProperties: {
       // For fill layer
       'fill-color': '#6b7280',
       'fill-opacity': 0.3,
       // For outline layer (separate)
       'line-color': '#374151',
-      'line-width': 1,
-      'line-opacity': 0.8
+      'line-width': 2,
+      'line-opacity': 0.9
     }
   },
   {
@@ -278,6 +278,88 @@ export const LAYER_SOURCES: LayerSource[] = [
         17, 4.0
       ],
       'line-opacity': 0.8
+    }
+  },
+
+  // Fairfax County Stormwater and Flood Risk layers
+  {
+    id: 'floodplain-easements',
+    label: 'Floodplain Easements',
+    filename: 'floodplain_easements.pmtiles',
+    type: 'vector',
+    vectorLayerId: 'floodplain_easements',
+    defaultVisible: false,
+    defaultOpacity: 0.5,
+    category: 'hydrology',
+    description: 'Recorded floodplain easements in Fairfax County (non-regulatory reference). Source: Fairfax County GIS',
+    paintProperties: {
+      'fill-color': '#60a5fa',  // Light blue for floodplain
+      'fill-opacity': 0.4,
+      'fill-outline-color': '#2563eb'
+    }
+  },
+  {
+    id: 'inadequate-outfalls',
+    label: 'Inadequate Outfalls',
+    filename: 'inadequate_outfalls.pmtiles',
+    type: 'vector',
+    vectorLayerId: 'inadequate_outfalls',
+    defaultVisible: false,
+    defaultOpacity: 0.6,
+    category: 'hydrology',
+    description: 'Drainage areas with inadequate stormwater outfalls. Uses colorblind-safe Okabe-Ito palette with distinct patterns. Source: Fairfax County GIS',
+    paintProperties: {
+      'fill-pattern': [
+        'match',
+        ['get', 'determination'],
+        'Erosion', 'pattern-outfall-erosion',
+        'Vertical Erosion', 'pattern-outfall-vertical-erosion',
+        'Left Bank Unstable', 'pattern-outfall-left-bank-unstable',
+        'Right Bank Unstable', 'pattern-outfall-right-bank-unstable',
+        'Left and Right Bank Unstable', 'pattern-outfall-both-banks-unstable',
+        'Habitat Score', 'pattern-outfall-habitat-score',
+        'pattern-outfall-erosion'  // Fallback
+      ],
+      'fill-opacity': 0.6,
+      // Outline layer to mask pattern edge artifacts
+      'line-color': [
+        'match',
+        ['get', 'determination'],
+        'Erosion', '#C67A00',           // Darker orange
+        'Vertical Erosion', '#A64800',  // Darker vermillion
+        'Left Bank Unstable', '#3A8AB5', // Darker sky blue
+        'Right Bank Unstable', '#005280', // Darker blue
+        'Left and Right Bank Unstable', '#007D59', // Darker bluish green
+        'Habitat Score', '#C0B635',     // Darker yellow
+        '#6b7280'  // Gray fallback
+      ],
+      'line-width': 0.75,
+      'line-opacity': 0.8
+    }
+  },
+  {
+    id: 'inadequate-outfall-points',
+    label: 'Inadequate Outfall Points',
+    filename: 'inadequate_outfall_points.pmtiles',
+    type: 'vector',
+    vectorLayerId: 'inadequate_outfall_points',
+    defaultVisible: false,
+    defaultOpacity: 0.9,
+    category: 'hydrology',
+    description: 'Pour points for inadequate stormwater outfalls. Source: Fairfax County GIS',
+    paintProperties: {
+      'circle-color': '#dc2626',  // Red for problem points
+      'circle-radius': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        10, 3,
+        14, 5,
+        17, 7
+      ],
+      'circle-opacity': 0.9,
+      'circle-stroke-color': '#7f1d1d',
+      'circle-stroke-width': 1
     }
   }
 ];

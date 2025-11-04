@@ -185,6 +185,131 @@ export const geologyPatterns: Record<GeologyType, string> = {
 };
 
 /**
+ * Outfall determination types for inadequate outfalls layer
+ * Provides colorblind-accessible patterns for stormwater problem areas
+ */
+export type OutfallDeterminationType =
+  | 'erosion'
+  | 'vertical-erosion'
+  | 'left-bank-unstable'
+  | 'right-bank-unstable'
+  | 'both-banks-unstable'
+  | 'habitat-score';
+
+/**
+ * Generate an outfall pattern as ImageData for MapLibre GL
+ * Uses Okabe-Ito colorblind-safe palette
+ */
+export function generateOutfallPattern(type: OutfallDeterminationType, color: string): ImageData {
+  const size = 64;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d');
+
+  if (!ctx) {
+    throw new Error('Could not get canvas context');
+  }
+
+  // Set base color with transparency
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.7;
+  ctx.fillRect(0, 0, size, size);
+
+  // Reset alpha for pattern lines
+  ctx.globalAlpha = 1.0;
+  ctx.strokeStyle = adjustColor(color, -20); // Softer contrast for less visual weight
+
+  switch (type) {
+    case 'erosion':
+      // Crosshatch - widest spacing
+      ctx.lineWidth = 2;
+      for (let i = -size; i < size * 2; i += 16) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + size, size);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.moveTo(i, size);
+        ctx.lineTo(i + size, 0);
+        ctx.stroke();
+      }
+      break;
+
+    case 'vertical-erosion':
+      // Diagonal NW-SE - thinner line for smoother diagonal
+      ctx.lineWidth = 1.5;
+      for (let i = -size; i < size * 2; i += 16) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + size, size);
+        ctx.stroke();
+      }
+      break;
+
+    case 'left-bank-unstable':
+      // Diagonal NE-SW - thinner line for smoother diagonal
+      ctx.lineWidth = 1.5;
+      for (let i = -size; i < size * 2; i += 16) {
+        ctx.beginPath();
+        ctx.moveTo(i, size);
+        ctx.lineTo(i + size, 0);
+        ctx.stroke();
+      }
+      break;
+
+    case 'right-bank-unstable':
+      // Vertical lines
+      ctx.lineWidth = 2;
+      for (let x = 0; x < size; x += 16) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, size);
+        ctx.stroke();
+      }
+      break;
+
+    case 'both-banks-unstable':
+      // Horizontal lines
+      ctx.lineWidth = 2;
+      for (let y = 0; y < size; y += 16) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(size, y);
+        ctx.stroke();
+      }
+      break;
+
+    case 'habitat-score':
+      // Sparse dots - much wider spacing
+      ctx.fillStyle = adjustColor(color, -20);
+      for (let y = 8; y < size; y += 16) {
+        for (let x = 8; x < size; x += 16) {
+          ctx.beginPath();
+          ctx.arc(x, y, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+  }
+
+  return ctx.getImageData(0, 0, size, size);
+}
+
+/**
+ * Outfall patterns with Okabe-Ito colorblind-safe colors
+ */
+export const outfallPatterns: Record<OutfallDeterminationType, string> = {
+  'erosion': '#E69F00',                    // Orange
+  'vertical-erosion': '#D55E00',           // Vermillion
+  'left-bank-unstable': '#56B4E9',         // Sky Blue
+  'right-bank-unstable': '#0072B2',        // Blue
+  'both-banks-unstable': '#009E73',        // Bluish Green
+  'habitat-score': '#F0E442'               // Yellow
+};
+
+/**
  * Generate a pattern as data URL for CSS backgrounds (for legend)
  * Returns a smaller 24x24px pattern optimized for legend display
  */

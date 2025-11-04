@@ -2,9 +2,9 @@
 """
 Download Fairfax County hydrography datasets via ArcGIS REST API.
 
-Downloads Water Features (lines and polygons) and Perennial Streams from
-Fairfax County Open Data. Reprojects from State Plane feet to WGS84 and
-clips to AOI bounding box.
+Downloads Water Features (lines and polygons), Perennial Streams, and
+Watersheds from Fairfax County Open Data. Reprojects from State Plane
+feet to WGS84 and clips to AOI bounding box.
 
 Usage:
     python download_fairfax_hydro.py
@@ -38,6 +38,11 @@ DATASETS = {
         "url": "https://services1.arcgis.com/ioennV6PpG5Xodq0/arcgis/rest/services/OpenData_S14/FeatureServer/0",
         "source_crs": "EPSG:2283",  # State Plane VA feet (NAD83)
         "fields": ["NAME", "FTYPE", "FCODE", "VISIBLE", "SOURCE"]
+    },
+    "watersheds": {
+        "url": "https://services1.arcgis.com/ioennV6PpG5Xodq0/ArcGIS/rest/services/OpenData_S2/FeatureServer/3",
+        "source_crs": "EPSG:2283",  # State Plane VA feet (NAD83)
+        "fields": ["NAME", "WEB_ADDRESS"]
     }
 }
 
