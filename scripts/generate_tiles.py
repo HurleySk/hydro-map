@@ -160,12 +160,15 @@ def main(data_dir, output_dir, min_zoom, max_zoom, tile_size, contour_interval, 
     else:
         click.echo(f"\nWarning: Filled DEM not found at {filled_dem}, skipping contours")
 
-    # Vector tiles (streams, geology, contours, huc12)
+    # Vector tiles (streams, geology, contours, huc12, fairfax hydrology)
     vector_files = {
         'streams': data_path / 'streams.gpkg',
         'geology': data_path / 'geology.gpkg',
         'contours': contours_gpkg,
         'huc12': data_path / 'huc12.gpkg',
+        'fairfax_water_lines': data_path / 'fairfax_water_lines.gpkg',
+        'fairfax_water_polys': data_path / 'fairfax_water_polys.gpkg',
+        'perennial_streams': data_path / 'perennial_streams.gpkg',
     }
 
     for name, vector_file in vector_files.items():

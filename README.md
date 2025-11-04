@@ -1,6 +1,6 @@
 # Hydro-Map
 
-**Version 1.5.0**
+**Version 1.7.0**
 
 An interactive web application for exploring hydrological and geological features, with on-demand watershed delineation, cross-section analysis, and multi-layer visualization.
 
@@ -10,11 +10,11 @@ An interactive web application for exploring hydrological and geological feature
 
 - **On-Demand Watershed Delineation**: Click any point on the map to instantly compute the upstream catchment area with detailed statistics.
 - **Topographic Wetness Index (TWI)**: Visualize areas prone to water saturation with a blue gradient showing dry to wet areas based on upslope area and slope.
-- **Dual Stream Networks**: Visualize both NHD-based real streams and DEM-derived calculated streams with Strahler order, flow direction, and length attributes.
+- **Fairfax Water Layers**: Toggle dedicated Fairfax County line and polygon hydro datasets plus a perennial stream network derived from local open data.
 - **HUC12 Watershed Boundaries**: Reference layer showing USGS hydrologic unit boundaries with labels.
 - **Terrain Analysis**: Toggle hillshade, slope, aspect, and contour visualizations derived from the DEM.
 - **Cross-Section Tool**: Draw a line to generate elevation profiles with distance metrics, sample counts, and geology contact totals.
-- **Feature Queries**: Inspect stream and geology attributes with an adjustable search buffer and structured warnings for data limitations.
+- **Feature Queries**: Inspect geology context, watershed membership, and DEM samples with an adjustable search buffer and structured warnings for data limitations.
 - **Dataset Health Monitoring**: API endpoint (`/api/feature-info/status`) for checking data availability and integrity of all datasets.
 - **Dynamic Legends**: Auto-display legends for TWI and geology layers, synced with layer visibility and opacity.
 - **Tile Health Monitoring**: Built-in tile status panel reports coverage, reachability, and max zoom for every PMTiles source.
@@ -63,20 +63,23 @@ cp .env.example .env  # Add Stadia Maps API key and edit paths as needed
 
 ### Data Preparation
 
-Prepare your DEM data and generate tiles:
+Prepare your DEM data, download Fairfax hydrology, and generate tiles:
 
 ```bash
 # 1. Process DEM → flow grids + terrain products
 python scripts/prepare_dem.py --input data/raw/dem/elevation.tif --output data/processed/dem/
 
-# 2. Extract DEM-derived streams
-python scripts/prepare_streams.py --flow-acc data/processed/dem/flow_accumulation.tif --output data/processed/streams_dem.gpkg
+# 2. Download Fairfax County hydro datasets
+python scripts/download_fairfax_hydro.py
 
-# 3. Generate PMTiles (hillshade, slope, aspect, contours, streams)
+# 3. Prepare Fairfax hydro layers (normalize fields, add metrics)
+python scripts/prepare_fairfax_hydro.py
+
+# 4. Generate PMTiles (terrain, geology, Fairfax hydrology, contours)
 python scripts/generate_tiles.py --data-dir data/processed --output-dir data/tiles --max-zoom 17
 ```
 
-For complete workflows including NHD stream processing and HUC12 boundaries, see [docs/DATA_PREPARATION.md](docs/DATA_PREPARATION.md).
+For complete workflows including optional custom stream extraction or integrating alternative regional datasets, see [docs/DATA_PREPARATION.md](docs/DATA_PREPARATION.md).
 
 ### Running the Application
 
@@ -122,17 +125,17 @@ Results are cached by location for fast repeated queries.
 
 ### Layer Controls
 
-- **Map Layers panel**: Toggle visibility and adjust opacity for terrain, streams, contours, HUC12 boundaries
+- **Map Layers panel**: Toggle visibility and adjust opacity for terrain, Fairfax hydrology, contours, and reference overlays
 - **Terrain group**: Hillshade, slope, aspect, contours
-- **Hydrology group**: Real streams (NHD), calculated streams (DEM-derived), Topographic Wetness Index
+- **Hydrology group**: Topographic Wetness Index, Fairfax water features (lines/polygons), Fairfax perennial streams
 - **Reference group**: HUC12 boundaries, geology
 
 ### Feature Information
 
 Click **Feature Info** mode and click the map to inspect nearby features:
-- **Streams**: Name, Strahler order, length, flow direction
-- **Geology**: Rock type, formation, age
-- **DEM Samples**: Elevation, slope, aspect, TWI at clicked location
+- **Geology**: Rock type, formation, age, and data source
+- **Watershed context**: HUC12 identifier, name, and area (if available)
+- **DEM Samples**: Elevation, slope, aspect, TWI at the clicked location
 
 ### Tile Status
 
@@ -147,7 +150,7 @@ See [docs/API.md](docs/API.md) for complete API documentation with schemas and e
 - `POST /api/delineate` - Watershed delineation with optional stream snapping
 - `GET /api/delineate/status` - Check data file availability
 - `POST /api/cross-section` - Generate elevation profiles
-- `POST /api/feature-info` - Query stream/geology/spring attributes
+- `POST /api/feature-info` - Query geology, watershed, and DEM sample attributes
 - `GET /api/feature-info/status` - Dataset health check with metadata
 - `GET /tiles/{filename}` - PMTiles serving with range request support
 

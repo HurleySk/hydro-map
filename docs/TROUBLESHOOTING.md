@@ -1,6 +1,6 @@
 # Troubleshooting Guide
 
-**Version**: 1.5.0
+**Version**: 1.7.0
 
 ## Overview
 
@@ -185,30 +185,15 @@ Flow direction raster appears uniform or invalid.
 python scripts/prepare_dem.py --breach  # Instead of --fill
 ```
 
-### Stream Extraction Shows No Streams
+### Legacy Stream Extraction Issues
 
-**Symptom**:
-Streams layer is empty or has very few features.
+The default build now uses Fairfax County hydrography. If you are running the legacy DEM/NHD stream pipeline and see empty results:
 
-**Solutions**:
+1. Lower the flow accumulation threshold (e.g., `python scripts/prepare_streams.py --threshold 100`).
+2. Verify `flow_accumulation.tif` statistics with `gdalinfo -stats`.
+3. Use higher-resolution DEM data (10m DEM captures far more channels than 30m/90m).
 
-1. **Threshold too high**:
-   ```bash
-   # Try lower threshold
-   python scripts/prepare_streams.py --threshold 100  # Instead of 1000
-   ```
-
-2. **Flow accumulation incorrect**:
-   ```bash
-   # Verify flow accumulation looks correct
-   gdalinfo -stats data/processed/dem/flow_accumulation.tif
-   # Min should be 1, max should be large (10000+)
-   ```
-
-3. **DEM resolution too coarse**:
-   - 90m DEM: Only major streams visible
-   - 30m DEM: Medium streams
-   - 10m DEM: Most streams including headwaters
+See [data/STREAMS.md](data/STREAMS.md#legacy-dem-derived-stream-methodology) for the full troubleshooting guide.
 
 ### Memory Error During Processing
 
@@ -304,12 +289,12 @@ python backend/scripts/generate_tiles.py  # Already includes --xyz
 ### Vector Layer Not Rendering
 
 **Symptom**:
-Vector layers (streams, HUC12) don't appear on map.
+Vector layers (Fairfax hydrology, HUC12) don't appear on map.
 
 **Diagnosis**:
 ```bash
 # Check internal layer name
-pmtiles show data/tiles/streams_nhd.pmtiles | grep "layer ID"
+pmtiles show data/tiles/fairfax_water_lines.pmtiles | grep "layer"
 
 # Should match vectorLayerId in frontend/src/lib/config/layers.ts
 ```
@@ -318,7 +303,7 @@ pmtiles show data/tiles/streams_nhd.pmtiles | grep "layer ID"
 1. Update `vectorLayerId` in `layers.ts` to match actual layer name
 2. OR regenerate tiles with correct layer name using tippecanoe `-l` flag:
    ```bash
-   tippecanoe -o output.mbtiles -l streams input.geojson
+   tippecanoe -o output.mbtiles -l fairfax_water_lines input.geojson
    ```
 
 ### Contours Missing
@@ -871,5 +856,5 @@ Paste relevant log excerpts
 | `503 Service Unavailable: DEM file not found` | Data path incorrect | Fix paths in `.env` |
 | `Address already in use` | Port conflict | Kill process or use different port |
 | `Failed to load PMTiles header` | Corrupt PMTiles | Regenerate tiles |
-| `Layer 'streams' does not exist` | vectorLayerId mismatch | Fix `layers.ts` config |
+| `Layer 'fairfax_water_lines' does not exist` | vectorLayerId mismatch | Fix `layers.ts` config |
 | `Point outside DEM coverage` | Click outside DEM | Click within DEM extent |

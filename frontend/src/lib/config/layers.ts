@@ -100,61 +100,6 @@ export const LAYER_SOURCES: LayerSource[] = [
 
   // Hydrology layers (vector)
   {
-    id: 'streams-nhd',
-    label: 'Real Streams',
-    filename: 'streams_nhd.pmtiles',
-    type: 'vector',
-    vectorLayerId: 'streams_nhd', // Actual layer name in PMTiles (with underscore)
-    defaultVisible: true,
-    defaultOpacity: 1.0,
-    category: 'hydrology',
-    description: 'Real stream network from National Hydrography Dataset',
-    paintProperties: {
-      'line-color': '#1e3a8a', // Dark blue
-      'line-width': [
-        'interpolate',
-        ['linear'],
-        ['zoom'],
-        8, 1.0,
-        14, 2.5,
-        17, 4.0
-      ],
-      'line-opacity': 1.0
-    }
-  },
-  {
-    id: 'streams-dem',
-    label: 'DEM-Derived Streams',
-    filename: 'streams_dem.pmtiles',
-    type: 'vector',
-    vectorLayerId: 'streams', // Actual layer name in PMTiles (fixed from streams_t250_filtered)
-    defaultVisible: false,
-    defaultOpacity: 0.7,
-    category: 'hydrology',
-    description: 'Drainage network calculated from DEM',
-    paintProperties: {
-      'line-color': [
-        'interpolate',
-        ['linear'],
-        ['coalesce', ['get', 'drainage_area_sqkm'], 0],
-        0, '#2563eb',      // Very small: medium-dark blue
-        1, '#1e40af',      // Small: dark blue
-        5, '#1e3a8a',      // Medium: darker blue
-        15, '#172554',     // Large: very dark blue
-        50, '#0f172a'      // Very large: almost navy
-      ],
-      'line-width': [
-        'interpolate',
-        ['linear'],
-        ['zoom'],
-        8, 0.5,
-        14, 1.5,
-        17, 3.0
-      ],
-      'line-opacity': 0.7
-    }
-  },
-  {
     id: 'twi',
     label: 'Topographic Wetness Index',
     filename: 'twi.pmtiles',
@@ -252,6 +197,86 @@ export const LAYER_SOURCES: LayerSource[] = [
       // For outline layer (separate)
       'line-color': '#4b5563',
       'line-width': 0.5,
+      'line-opacity': 0.8
+    }
+  },
+
+  // Fairfax County hydrology layers
+  {
+    id: 'fairfax-water-lines',
+    label: 'Fairfax Water Features (Lines)',
+    filename: 'fairfax_water_lines.pmtiles',
+    type: 'vector',
+    vectorLayerId: 'fairfax_water_lines',
+    defaultVisible: false,
+    defaultOpacity: 0.8,
+    category: 'hydrology',
+    description: 'Fairfax County water features (streams, channels, ditches)',
+    paintProperties: {
+      'line-color': [
+        'match',
+        ['coalesce', ['get', 'type'], ''],
+        'Stream', '#3b82f6',
+        'Channel', '#06b6d4',
+        'Ditch', '#6366f1',
+        'Canal', '#8b5cf6',
+        '#0ea5e9'  // fallback blue
+      ],
+      'line-width': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        10, 1.0,
+        14, 2.0,
+        17, 3.5
+      ],
+      'line-opacity': 0.8
+    }
+  },
+  {
+    id: 'fairfax-water-polys',
+    label: 'Fairfax Water Features (Polygons)',
+    filename: 'fairfax_water_polys.pmtiles',
+    type: 'vector',
+    vectorLayerId: 'fairfax_water_polys',
+    defaultVisible: false,
+    defaultOpacity: 0.6,
+    category: 'hydrology',
+    description: 'Fairfax County water bodies (ponds, lakes, reservoirs)',
+    paintProperties: {
+      'fill-color': [
+        'match',
+        ['coalesce', ['get', 'type'], ''],
+        'Lake', '#0284c7',
+        'Pond', '#0ea5e9',
+        'Reservoir', '#0369a1',
+        'Water', '#06b6d4',
+        '#0891b2'  // fallback blue
+      ],
+      'fill-opacity': 0.6,
+      'fill-outline-color': '#075985'
+    }
+  },
+  {
+    id: 'perennial-streams',
+    label: 'Fairfax Perennial Streams',
+    filename: 'perennial_streams.pmtiles',
+    type: 'vector',
+    vectorLayerId: 'perennial_streams',
+    defaultVisible: false,
+    defaultOpacity: 0.8,
+    category: 'hydrology',
+    description: 'Fairfax County perennial stream network',
+    paintProperties: {
+      'line-color': '#1d4ed8',  // Deep blue for perennial streams
+      'line-width': [
+        'interpolate',
+        ['linear'],
+        ['zoom'],
+        10, 1.5,
+        14, 2.5,
+        17, 4.0
+      ],
       'line-opacity': 0.8
     }
   }

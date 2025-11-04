@@ -5,15 +5,17 @@ All notable changes to Hydro-Map are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.5.0] - 2025-11-04
+## [1.7.0] - 2025-12-15
 
 ### Added
 - **Geology Layer Integration**: Geology layer is now fully enabled in the UI with automatic legend support and texture patterns for colorblind accessibility.
 - **Feature Info Enhancements**: Adjustable query buffer (10-200m) with persistence, automatic geology queries even when the layer is hidden, and clearer stream/geology grouping.
+- **Fairfax Hydrography Pipeline**: Download and processing scripts for Fairfax County water feature lines, polygons, and perennial streams with corresponding PMTiles layers.
 
 ### Changed
 - Cross-section tool now reports total distance, sample count, and geology contact totals alongside the elevation chart.
-- Documentation refreshed to reflect geology availability, updated layer groupings, and new Feature Info controls.
+- Hydrology configuration now ships with Fairfax County datasets; legacy DEM/NHD stream workflows moved to optional documentation.
+- Documentation refreshed to reflect geology availability, updated layer groupings, Fairfax hydrography workflow, and new Feature Info controls.
 
 ## [1.4.0] - 2025-11-03
 

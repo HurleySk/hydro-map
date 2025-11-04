@@ -1,6 +1,6 @@
 # API Reference
 
-**Version**: 1.5.0
+**Version**: 1.7.0
 
 ## Overview
 
@@ -307,7 +307,7 @@ Get attributes of features near a point.
 {
   "lat": 37.7749,
   "lon": -122.4194,
-  "layers": ["streams", "geology"],
+  "layers": ["geology", "huc12"],
   "buffer": 10
 }
 ```
@@ -318,7 +318,7 @@ Get attributes of features near a point.
 |-------|------|----------|-------------|-------------|
 | `lat` | float | Yes | -90 to 90 | Latitude in WGS84 decimal degrees |
 | `lon` | float | Yes | -180 to 180 | Longitude in WGS84 decimal degrees |
-| `layers` | array | No (default: ["streams", "geology"]) | - | Which layers to query |
+| `layers` | array | No (default: ["geology"]) | - | Which layers to query (`geology`, `huc12`, custom layers from `LAYER_DATASET_MAP`) |
 | `buffer` | float | No (default: 10) | 0 to 1000 | Search buffer in meters |
 
 **Response** (200 OK):
@@ -330,32 +330,29 @@ Get attributes of features near a point.
     "lon": -122.4194
   },
   "features": {
-    "streams": [
-      {
-        "type": "stream",
-        "name": "Lobos Creek",
-        "length_km": 2.345,
-        "drainage_area_sqkm": 5.678,
-        "stream_order": 3,
-        "upstream_length_km": 12.45,
-        "slope": 0.025,
-        "max_elev_m": 123.4,
-        "min_elev_m": 5.6,
-        "stream_type": "Perennial",
-        "order": 3
-      }
-    ],
     "geology": [
       {
         "type": "geology",
-        "formation": "Franciscan Complex",
-        "rock_type": "Sandstone",
-        "age": "Jurassic-Cretaceous",
-        "description": "Turbidite sequence with intercalated shale..."
+        "formation": "Occoquan Granite",
+        "rock_type": "Granite",
+        "age": "Late Ordovician",
+        "data_source": "Fairfax County GIS"
       }
-    ]
+    ],
+    "huc12": {
+      "huc12": "020700080301",
+      "name": "Difficult Run",
+      "area_sqkm": 172.45,
+      "states": "VA"
+    },
+    "dem_samples": {
+      "elevation_m": 105.4,
+      "slope_degrees": 6.2,
+      "aspect_degrees": 218.0,
+      "twi": 8.43
+    }
   },
-  "num_features": 2
+  "num_features": 3
 }
 ```
 
@@ -363,19 +360,13 @@ Get attributes of features near a point.
 
 - `location`: Echoed query coordinates
 - `features`: Object with layer names as keys
-  - `streams`: Array of stream features
-    - `name`: Stream name (from NHD) or "Unnamed"
-    - `drainage_area_sqkm`: Upstream drainage area
-    - `stream_order`: Strahler stream order
-    - `stream_type`: Perennial/Intermittent/Ephemeral (DEM-derived only)
-    - `upstream_length_km`: Total upstream stream length
-    - `slope`: Average channel slope (rise/run)
-    - `max/min_elev_m`: Elevation range
-  - `geology`: Array of geological formations (if point intersects polygons)
-    - `formation`: Geological formation name
-    - `rock_type`: Primary rock type
-    - `age`: Geological age/period
-    - `description`: Formation description
+  - `geology`: Array of geological formations intersecting the buffer
+    - `formation`, `rock_type`, `age`, `data_source`
+  - `huc12`: Watershed polygon metadata (present if HUC12 dataset configured)
+    - `huc12`, `name`, `area_sqkm`, `states`
+  - `dem_samples`: Terrain derivatives at the query point
+    - `elevation_m`, `slope_degrees`, `aspect_degrees`, `twi`
+  - Custom datasets (e.g., additional entries in `LAYER_DATASET_MAP`) will appear under their layer IDs
 - `num_features`: Total feature count across all layers
 
 **Errors**:
@@ -402,8 +393,7 @@ curl -X POST http://localhost:8000/api/feature-info \
 
 - Returns empty object if no features found within buffer
 - Buffer is measured in projected coordinates (Equal Earth EPSG:6933)
-- Stream query searches for intersecting features within buffer
-- Geology query searches for polygons containing the point
+- Extend `LAYER_DATASET_MAP` to expose additional vector layers through this endpoint
 
 ---
 
@@ -665,7 +655,7 @@ curl -X POST http://localhost:8000/api/delineate \
 }
 ```
 
-#### 2. Query Stream at Pour Point
+#### 2. Query Geology at Pour Point
 
 ```bash
 curl -X POST http://localhost:8000/api/feature-info \
@@ -673,7 +663,7 @@ curl -X POST http://localhost:8000/api/feature-info \
   -d '{
     "lat": 37.774856,
     "lon": -122.419234,
-    "layers": ["streams"],
+    "layers": ["geology", "huc12"],
     "buffer": 10
   }' | jq .
 ```
@@ -682,12 +672,16 @@ curl -X POST http://localhost:8000/api/feature-info \
 ```json
 {
   "features": {
-    "streams": [{
-      "name": "Lobos Creek",
-      "drainage_area_sqkm": 2.456,
-      "stream_order": 3,
-      "stream_type": "Perennial"
-    }]
+    "geology": [{
+      "formation": "Franciscan Complex",
+      "rock_type": "Sandstone",
+      "age": "Jurassic-Cretaceous"
+    }],
+    "huc12": {
+      "huc12": "180500040403",
+      "name": "Lobos Creek-Francisco Reservoir",
+      "area_sqkm": 6.32
+    }
   }
 }
 ```
@@ -759,9 +753,14 @@ response = requests.post(
 
 if response.status_code == 200:
     features = response.json()["features"]
-    if "streams" in features:
-        for stream in features["streams"]:
-            print(f"Stream: {stream['name']}, Order: {stream['order']}")
+    if "geology" in features:
+        for formation in features["geology"]:
+            print(f"Formation: {formation['formation']} ({formation['rock_type']})")
+    if "huc12" in features:
+        print(f"HUC12: {features['huc12']['huc12']} - {features['huc12']['name']}")
+    if "dem_samples" in features:
+        samples = features["dem_samples"]
+        print(f"Elevation: {samples['elevation_m']:.1f} m, Slope: {samples['slope_degrees']:.1f}°")
 ```
 
 ### JavaScript (fetch) Example
@@ -835,12 +834,13 @@ try {
 
 ## API Versioning
 
-**Current version**: 1.5.0 (no API versioning in URL)
+**Current version**: 1.7.0 (no API versioning in URL)
 
 Future versions may implement URL-based versioning (e.g., `/api/v2/delineate`) for breaking changes. The current API is considered stable for the 1.x release series.
 
 ## Changelog
 
+- **v1.7.0** (2025-12-15): Feature Info responses limited to geology/HUC12/DEM datasets; Fairfax hydrography documented for integration
 - **v1.5.0** (2025-11-04): Cross-section responses include geology contact counts; Feature Info defaults adjusted to query geology automatically
 - **v1.2.1** (2025-11-02): Documentation improvements
 - **v1.2.0** (2025-11-01): No API changes (frontend refactor only)

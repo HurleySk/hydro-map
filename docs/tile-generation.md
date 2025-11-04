@@ -1,6 +1,6 @@
 # Tile Generation Quick Reference
 
-**Version**: 1.5.0
+**Version**: 1.7.0
 
 Quick reference for common tile generation commands and workflows.
 
@@ -61,8 +61,9 @@ python scripts/generate_tiles.py \
   - slope.pmtiles: ~8-12MB
   - aspect.pmtiles: ~8-12MB
   - contours.pmtiles: ~5-10MB
-  - streams_dem.pmtiles: ~2-5MB
-  - streams_nhd.pmtiles: ~3-6MB (if processed)
+  - fairfax_water_lines.pmtiles: ~2-4MB
+  - fairfax_water_polys.pmtiles: ~2-4MB
+  - perennial_streams.pmtiles: ~2-3MB
   - huc12.pmtiles: ~1-3MB (if processed)
 - Generation time: 20-40 minutes (depends on area size)
 
@@ -211,18 +212,20 @@ After running `generate_tiles.py`, expect the following files in `data/tiles/`:
 
 **Vector Tiles** (generated if source data exists):
 - `contours.pmtiles` - Elevation contour lines (auto-generated if missing)
-- `streams_dem.pmtiles` - DEM-derived drainage network (if `streams_dem.gpkg` exists)
-- `streams_nhd.pmtiles` - NHD-based stream network (if `streams_nhd.gpkg` exists)
+- `fairfax_water_lines.pmtiles` - Fairfax County water features (linework)
+- `fairfax_water_polys.pmtiles` - Fairfax County water bodies (polygons)
+- `perennial_streams.pmtiles` - Fairfax perennial stream network
 - `huc12.pmtiles` - HUC12 watershed boundaries (if `huc12.gpkg` exists)
 
 ### Vector Layer ID Reference
 
 **Important**: Vector layer names inside PMTiles must match `vectorLayerId` in frontend config:
 
-| PMTiles File | Internal Layer Name | Config vectorLayerId |
-|--------------|---------------------|---------------------|
-| `streams_dem.pmtiles` | `streams` | `streams` |
-| `streams_nhd.pmtiles` | `streams_nhd` | `streams_nhd` |
+| PMTiles File | Internal Layer Name | Config `vectorLayerId` |
+|--------------|---------------------|-----------------------|
+| `fairfax_water_lines.pmtiles` | `fairfax_water_lines` | `fairfax_water_lines` |
+| `fairfax_water_polys.pmtiles` | `fairfax_water_polys` | `fairfax_water_polys` |
+| `perennial_streams.pmtiles` | `perennial_streams` | `perennial_streams` |
 | `huc12.pmtiles` | `huc12` | `huc12` |
 | `contours.pmtiles` | `contours` | `contours` |
 
@@ -234,15 +237,16 @@ For 100 sq mi area @ 10m DEM:
 
 **z=17** (max detail):
 ```
-hillshade.pmtiles:    15-20 MB
-slope.pmtiles:        8-12 MB
-aspect.pmtiles:       8-12 MB
-contours.pmtiles:     5-10 MB (10m interval)
-streams_dem.pmtiles:  2-5 MB
-streams_nhd.pmtiles:  3-6 MB
-huc12.pmtiles:        1-3 MB
+hillshade.pmtiles:         15-20 MB
+slope.pmtiles:             8-12 MB
+aspect.pmtiles:            8-12 MB
+contours.pmtiles:          5-10 MB (10m interval)
+fairfax_water_lines.pmtiles: 2-4 MB
+fairfax_water_polys.pmtiles: 2-4 MB
+perennial_streams.pmtiles:   2-3 MB
+huc12.pmtiles:              1-3 MB
 ─────────────────────────────
-Total:                ~42-68 MB
+Total:                     ~42-65 MB
 ```
 
 **z=16** (balanced):
@@ -269,13 +273,14 @@ Total: ~5-10 MB (~15% of z=17)
 ls -lh data/tiles/*.pmtiles
 
 # Expected output (example):
-# -rw-r--r--  hillshade.pmtiles         18M
-# -rw-r--r--  slope.pmtiles             10M
-# -rw-r--r--  aspect.pmtiles            10M
-# -rw-r--r--  contours.pmtiles           8M
-# -rw-r--r--  streams_dem.pmtiles        3M
-# -rw-r--r--  streams_nhd.pmtiles        4M
-# -rw-r--r--  huc12.pmtiles              2M
+# -rw-r--r--  hillshade.pmtiles             18M
+# -rw-r--r--  slope.pmtiles                 10M
+# -rw-r--r--  aspect.pmtiles                10M
+# -rw-r--r--  contours.pmtiles               8M
+# -rw-r--r--  fairfax_water_lines.pmtiles    3M
+# -rw-r--r--  fairfax_water_polys.pmtiles    3M
+# -rw-r--r--  perennial_streams.pmtiles      2M
+# -rw-r--r--  huc12.pmtiles                  2M
 ```
 
 ### Verify PMTiles Metadata
@@ -299,13 +304,13 @@ If `tile type` is empty, tiles won't render. Regenerate with metadata fix.
 **Check vector tiles**:
 
 ```bash
-pmtiles show data/tiles/streams_dem.pmtiles
+pmtiles show data/tiles/fairfax_water_lines.pmtiles
 ```
 
 **Must show**:
 ```
 tile type: mvt
-layer name: streams
+layer name: fairfax_water_lines
 max zoom: 17
 ```
 
@@ -393,7 +398,7 @@ ls -lh data/processed/*.gpkg
 
 # Verify data has content
 gdalinfo data/processed/dem/hillshade.tif
-ogrinfo data/processed/streams_dem.gpkg -al -so
+ogrinfo data/processed/fairfax_water_lines.gpkg -al -so
 
 # Check if source data is in correct location
 # Script looks for:
@@ -431,7 +436,7 @@ ogrinfo data/processed/streams_dem.gpkg -al -so
 
 ```bash
 # Check internal layer name
-pmtiles show data/tiles/streams_dem.pmtiles | grep "layer name"
+pmtiles show data/tiles/fairfax_water_lines.pmtiles | grep "layer"
 
 # Compare with frontend config
 # frontend/src/lib/config/layers.ts
@@ -578,8 +583,8 @@ Edit `scripts/generate_tiles.py` to comment out layers you don't need:
 # RASTER_LAYERS = ['hillshade', 'slope', 'aspect']  # Skip rasters
 RASTER_LAYERS = ['hillshade']  # Only hillshade
 
-# VECTOR_LAYERS = ['streams_dem', 'streams_nhd', 'huc12', 'contours']
-VECTOR_LAYERS = ['streams_dem']  # Only DEM streams
+# VECTOR_LAYERS = ['fairfax_water_lines', 'fairfax_water_polys', 'perennial_streams', 'huc12', 'contours']
+VECTOR_LAYERS = ['fairfax_water_lines']  # Generate just the Fairfax linework
 ```
 
 ### Custom Zoom Ranges Per Layer
@@ -669,12 +674,12 @@ Using `lanczos` or `bilinear` for aspect causes:
 
 **CRITICAL**: Internal layer name in PMTiles must match frontend config.
 
-Example: `streams_dem.pmtiles` has internal layer `streams`, which must match:
+Example: `fairfax_water_lines.pmtiles` has internal layer `fairfax_water_lines`, which must match:
 ```typescript
 // frontend/src/lib/config/layers.ts
 {
-  id: 'streams-dem',
-  vectorLayerId: 'streams',  // Must match PMTiles layer name
+  id: 'fairfax-water-lines',
+  vectorLayerId: 'fairfax_water_lines',  // Must match PMTiles layer name
   // ...
 }
 ```

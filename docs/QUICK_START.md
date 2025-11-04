@@ -1,6 +1,6 @@
 # Quick Start Guide
 
-**Version**: 1.5.0
+**Version**: 1.7.0
 
 Get Hydro-Map running in minutes.
 
@@ -96,112 +96,56 @@ mkdir -p data/raw/dem
 
 ## Process Data
 
-### Basic Workflow (DEM-Derived Streams Only)
+### Core Workflow (DEM + Fairfax Hydrography)
 
 ```bash
-# Activate backend venv
+# Activate backend venv for scripts
 cd backend
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+cd ..
 
-# 1. Process DEM (5-10 minutes for ~100 sq mi)
+# 1. Process DEM (fills sinks, builds terrain derivatives)
 python scripts/prepare_dem.py \
   --input data/raw/dem/elevation.tif \
   --output data/processed/dem/
 
-# This creates:
-# - filled_dem.tif (depression-filled DEM)
-# - flow_direction.tif (D8 flow direction)
-# - flow_accumulation.tif (upstream cell count)
-# - hillshade.tif (shaded relief)
-# - slope.tif (slope angle in degrees)
-# - aspect.tif (compass direction 0-360°)
+# Outputs: filled_dem.tif, flow_direction.tif, flow_accumulation.tif,
+#          hillshade.tif, slope.tif, aspect.tif
 
-# 2. Extract DEM-derived streams with multi-threshold workflow (2-5 minutes)
-# Extract at multiple thresholds
-python scripts/prepare_streams.py \
-  --flow-acc data/processed/dem/flow_accumulation.tif \
-  --flow-dir data/processed/dem/flow_direction.tif \
-  --output data/processed/streams_t100.gpkg \
-  --threshold 100
+# 2. Download Fairfax County hydrography (lines, polygons, perennial streams)
+python scripts/download_fairfax_hydro.py
 
-python scripts/prepare_streams.py \
-  --flow-acc data/processed/dem/flow_accumulation.tif \
-  --flow-dir data/processed/dem/flow_direction.tif \
-  --output data/processed/streams_t250.gpkg \
-  --threshold 250
+# Creates raw GeoPackages in data/raw/fairfax/
 
-python scripts/prepare_streams.py \
-  --flow-acc data/processed/dem/flow_accumulation.tif \
-  --flow-dir data/processed/dem/flow_direction.tif \
-  --output data/processed/streams_t500.gpkg \
-  --threshold 500
+# 3. Normalize Fairfax hydrography (standardize fields, add metrics)
+python scripts/prepare_fairfax_hydro.py
 
-# 3. Filter and merge streams (optional but recommended)
-python scripts/filter_dem_streams.py \
-  --input data/processed/streams_t250.gpkg \
-  --output data/processed/streams_dem.gpkg
+# Outputs processed GeoPackages in data/processed/:
+#   fairfax_water_lines.gpkg, fairfax_water_polys.gpkg, perennial_streams.gpkg
 
-# 4. Generate web tiles (5-15 minutes depending on area and max zoom)
+# 4. (Optional) Generate Topographic Wetness Index tiles
+# First compute TWI from DEM derivatives
+python scripts/compute_twi.py --output data/processed/dem/twi.tif
+# Then normalize & colorize for map display
+python scripts/process_twi_for_tiles.py
+
+# 5. Generate PMTiles (terrain rasters, Fairfax hydro, contours, geology if present)
 python scripts/generate_tiles.py \
   --data-dir data/processed \
   --output-dir data/tiles \
   --max-zoom 17 \
-  --contour-interval 10 \
-  --raster-resampling lanczos
-
-# This creates PMTiles in data/tiles/:
-# - hillshade.pmtiles (raster, z8-17)
-# - slope.pmtiles (raster, z8-17)
-# - aspect.pmtiles (raster, z8-17) - uses nearest-neighbor automatically
-# - contours.pmtiles (vector, z8-17)
-# - streams_dem.pmtiles (vector, z8-17) if streams_dem.gpkg exists
+  --contour-interval 10
 ```
 
-**Tip**: The `--contour-interval` defaults to 1m. For typical use at 100-200m viewing scale, 10m or 20m intervals work well and reduce file size.
+**Notes**:
+- `generate_tiles.py` automatically picks up Fairfax hydro GeoPackages, geology (`data/processed/geology.gpkg`), and HUC12 polygons if available.
+- If you skip the TWI step, disable the layer in the UI or add tiles later.
+- Adjust `--max-zoom` based on area size (z16 is plenty for county-scale projects).
 
-### Advanced: Add NHD Streams
+### Optional Workflows
 
-```bash
-# 1. Download NHD data from https://www.usgs.gov/national-hydrography
-# Place NHD Flowlines in data/raw/nhd/
-
-# 2. Process NHD streams
-python scripts/process_nhd.py \
-  --input data/raw/nhd/NHDFlowline.shp \
-  --output data/processed/streams_nhd.gpkg \
-  --bounds data/processed/dem/filled_dem.tif
-
-# 3. Optional: Merge with DEM-derived for comparison
-python scripts/merge_streams.py \
-  --nhd data/processed/streams_nhd.gpkg \
-  --dem data/processed/streams_dem.gpkg \
-  --output data/processed/streams_merged.gpkg
-
-# 4. Generate tiles (will include streams_nhd.pmtiles)
-python scripts/generate_tiles.py \
-  --data-dir data/processed \
-  --output-dir data/tiles \
-  --max-zoom 17
-```
-
-### Advanced: Add HUC12 Watershed Boundaries
-
-```bash
-# 1. Download WBD (Watershed Boundary Dataset) from USGS
-# https://www.usgs.gov/national-hydrography/watershed-boundary-dataset
-
-# 2. Process HUC12 boundaries
-python scripts/process_huc.py \
-  --input data/raw/wbd/WBDHU12.shp \
-  --output data/processed/huc12.gpkg \
-  --bounds data/processed/dem/filled_dem.tif
-
-# 3. Generate tiles (will include huc12.pmtiles)
-python scripts/generate_tiles.py \
-  --data-dir data/processed \
-  --output-dir data/tiles \
-  --max-zoom 14  # HUC12 typically doesn't need z17
-```
+- **HUC12 Watersheds**: Run `scripts/process_huc.py` before `generate_tiles.py` to add watershed outlines.
+- **Legacy DEM/NHD Streams**: See [Hydrology Data](data/STREAMS.md) for the previous multi-threshold extraction pipeline and guidance on integrating other regional networks.
 
 ## Run the Application
 
@@ -248,7 +192,7 @@ Navigate to: http://localhost:5173
 
 **Left Panel - Map Layers**:
 - Terrain group: Hillshade, Slope, Aspect, Contours
-- Hydrology group: Real Streams (NHD), DEM-Derived Streams, Topographic Wetness Index (TWI)
+- Hydrology group: Topographic Wetness Index (TWI), Fairfax Water Features (lines/polygons), Fairfax Perennial Streams
 - Reference group: HUC12 Watersheds, Geology (legend appears automatically when geology is visible)
 - Toggle visibility and adjust opacity for each layer
 
@@ -268,20 +212,19 @@ Navigate to: http://localhost:5173
 4. Adjust opacity slider (try 60% for good overlay visibility)
 5. Toggle **Slope** or **Aspect** to see terrain analysis
 
-### 3. View Stream Networks
+### 3. Explore Hydrology Layers
 
 1. Expand **Hydrology** group
-2. **Real Streams** (NHD) is visible by default (if you processed NHD data)
-3. Toggle **DEM-Derived Streams** to compare calculated vs. official streams
-4. Notice the color gradient on DEM-derived streams (darker = larger drainage area)
-5. Toggle **Topographic Wetness Index** (TWI) for a raster view of likely wet terrain; adjust opacity to blend with the basemap
-6. Expand the **Reference** group to toggle HUC12 watersheds or geology; the geology legend appears automatically when the layer is visible
+2. Toggle **Topographic Wetness Index** (TWI) for a raster view of likely wet terrain; adjust opacity to blend with the basemap
+3. Enable **Fairfax Water Features (Lines/Polygons)** to view open-data streams, channels, ponds, and reservoirs
+4. Toggle **Fairfax Perennial Streams** for a simplified perennial network overlay
+5. Expand the **Reference** group to toggle HUC12 watersheds or geology; the geology legend appears automatically when the layer is visible
 
 ### 4. Delineate a Watershed
 
 1. Expand **Analysis Tools** panel
 2. Click **"Delineate Watershed"** button (turns blue when active)
-3. Optional: Enable **"Snap to nearest stream"** checkbox
+3. Optional: Enable **"Snap to nearest stream"** if a stream dataset is configured for your project
 4. Click anywhere on the map (preferably on or near a stream)
 5. Wait 1-3 seconds for processing
 6. View results:
@@ -328,8 +271,8 @@ Navigate to: http://localhost:5173
 
 1. Click **"Feature Info"** in Analysis Tools (button turns blue when active)
 2. Adjust the **Search Buffer** slider (10-200 m) to control how far from the click point features are queried
-3. Click the map near a stream or inside a geology polygon
-4. Review stream and geology attributes in the Feature Info panel; geology is returned even if the layer is hidden
+3. Click the map inside your area of interest
+4. Review geology, watershed (HUC12), and DEM sample attributes in the Feature Info panel; geology is returned even if the layer is hidden
 5. Click **"Cancel"** to exit Feature Info mode
 
 ## Verify Installation
@@ -342,14 +285,15 @@ ls -lh data/processed/dem/
 # Should see: filled_dem.tif, flow_direction.tif, flow_accumulation.tif,
 #             hillshade.tif, slope.tif, aspect.tif
 
-# Check stream outputs
-ls -lh data/processed/*.gpkg
-# Should see: streams_dem.gpkg (and streams_nhd.gpkg, huc12.gpkg if processed)
+# Check Fairfax hydro outputs
+ls -lh data/processed/fairfax*.gpkg data/processed/perennial_streams.gpkg
+# Should see: fairfax_water_lines.gpkg, fairfax_water_polys.gpkg, perennial_streams.gpkg
 
 # Check PMTiles
 ls -lh data/tiles/*.pmtiles
 # Should see at minimum: hillshade.pmtiles, slope.pmtiles, aspect.pmtiles,
-#                        contours.pmtiles, streams_dem.pmtiles
+#                        contours.pmtiles, fairfax_water_lines.pmtiles,
+#                        fairfax_water_polys.pmtiles, perennial_streams.pmtiles
 ```
 
 ### Check Backend API
@@ -374,7 +318,7 @@ curl -X POST http://localhost:8000/api/delineate \
 curl -I http://localhost:8000/tiles/hillshade.pmtiles
 # Should return: 200 OK, Accept-Ranges: bytes
 
-curl -I http://localhost:8000/tiles/streams_dem.pmtiles
+curl -I http://localhost:8000/tiles/fairfax_water_lines.pmtiles
 # Should return: 200 OK
 ```
 
@@ -438,7 +382,7 @@ curl http://localhost:8000/api/delineate/status
 #    Solution: Pan map to area covered by your DEM
 
 # 3. Snap to stream fails (no streams in radius)
-#    Solution: Disable "Snap to nearest stream" or increase radius
+#    Solution: Disable "Snap to nearest stream" unless you've configured a stream dataset in the backend
 ```
 
 ### Tiles render incorrectly
@@ -450,7 +394,7 @@ curl http://localhost:8000/api/delineate/status
 
 **Vector tiles don't appear**:
 - Verify vector layer ID in PMTiles matches config
-- Check: `pmtiles show data/tiles/streams.pmtiles | grep layer_name`
+- Check: `pmtiles show data/tiles/fairfax_water_lines.pmtiles | grep layer_name`
 - Should match `vectorLayerId` in `frontend/src/lib/config/layers.ts`
 
 ### Map is blank

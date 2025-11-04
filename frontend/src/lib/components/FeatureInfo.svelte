@@ -37,21 +37,8 @@
 			const layersState = get(layers);
 			const layersToQuery: string[] = [];
 
-			// Check which stream layers are visible
-			if (layersState['streams-nhd']?.visible) {
-				layersToQuery.push('streams-nhd');
-			}
-			if (layersState['streams-dem']?.visible) {
-				layersToQuery.push('streams-dem');
-			}
-
 			// Always query geology (provides important context even if layer is hidden)
 			layersToQuery.push('geology');
-
-			// If no stream layers selected, default to streams-nhd
-			if (!layersToQuery.includes('streams-nhd') && !layersToQuery.includes('streams-dem')) {
-				layersToQuery.push('streams-nhd');
-			}
 
 			queriedLayers = layersToQuery;
 
@@ -97,8 +84,6 @@
 
 	function formatLayerName(layerId: string): string {
 		const layerNames: Record<string, string> = {
-			'streams-nhd': 'Real Streams (NHD)',
-			'streams-dem': 'Calculated Streams (DEM)',
 			'geology': 'Geology'
 		};
 		return layerNames[layerId] || layerId;

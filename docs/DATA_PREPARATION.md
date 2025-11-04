@@ -1,6 +1,6 @@
 # Data Preparation Guide
 
-**Version**: 1.5.0
+**Version**: 1.7.0
 
 This guide walks you through preparing data for the Hydro-Map application, including DEM processing, stream extraction (both DEM-derived and NHD-based), HUC12 watershed boundaries, and tile generation.
 
@@ -9,12 +9,13 @@ This guide walks you through preparing data for the Hydro-Map application, inclu
 - [Overview](#overview)
 - [Step 1: Download DEM Data](#step-1-download-dem-data)
 - [Step 2: Process DEM](#step-2-process-dem)
-- [Step 3a: Extract DEM-Derived Streams](#step-3a-extract-dem-derived-streams)
-- [Step 3b: Process NHD Streams (Optional)](#step-3b-process-nhd-streams-optional)
-- [Step 3c: Process HUC12 Watersheds (Optional)](#step-3c-process-huc12-watersheds-optional)
-- [Step 4: Generate Contours](#step-4-generate-contours-optional)
-- [Step 5: Generate Web Tiles](#step-5-generate-web-tiles)
-- [Step 6: Add Geology Data (Optional)](#step-6-add-geology-data-optional)
+- [Step 3: Download Fairfax Hydrography](#step-3-download-fairfax-hydrography)
+- [Step 4: Process Fairfax Hydrography](#step-4-process-fairfax-hydrography)
+- [Optional: Legacy Stream Workflows](#optional-legacy-stream-workflows)
+- [Step 5: Process HUC12 Watersheds (Optional)](#step-5-process-huc12-watersheds-optional)
+- [Step 6: Generate Contours (Optional)](#step-6-generate-contours-optional)
+- [Step 7: Generate Web Tiles](#step-7-generate-web-tiles)
+- [Step 8: Add Geology Data (Optional)](#step-8-add-geology-data-optional)
 - [Installing Required Tools](#installing-required-tools)
 - [Validation](#validation)
 - [Troubleshooting](#troubleshooting)
@@ -26,7 +27,7 @@ The application requires preprocessed hydrological data in three main categories
 
 ### Core Data (Required)
 1. **DEM Processing** → Filled DEM, flow direction, flow accumulation, terrain products
-2. **Stream Network** → At least one stream source (DEM-derived OR NHD)
+2. **Hydrography** → Fairfax water features + perennial streams (default) or a custom stream network
 3. **Web Tiles** → PMTiles for all raster and vector layers
 
 ### Optional Enhancements
@@ -34,23 +35,19 @@ The application requires preprocessed hydrological data in three main categories
 5. **Contours** → Elevation contour lines
 6. **Geology** → Geologic formations and rock types
 
-### Dual Stream Network Architecture (v1.1.1+)
+### Fairfax Hydrography (Default)
 
-The application supports **two independent stream layers**:
+Hydro-Map now ships with Fairfax County open-data hydrography:
 
-- **DEM-Derived Streams** (`streams_dem.pmtiles`):
-  - Calculated purely from flow accumulation
-  - Works globally, no external data needed
-  - Shows ephemeral channels and drainage patterns
-  - Useful for ungauged watersheds
+- **Fairfax Water Features (Lines)** (`fairfax_water_lines.pmtiles`): streams, channels, ditches, and canals
+- **Fairfax Water Features (Polygons)** (`fairfax_water_polys.pmtiles`): ponds, lakes, reservoirs, and flooded areas
+- **Fairfax Perennial Streams** (`perennial_streams.pmtiles`): simplified perennial-only network
 
-- **NHD-Based Streams** (`streams_nhd.pmtiles`):
-  - Official USGS National Hydrography Dataset
-  - Curated, named stream network (US only)
-  - Includes stream names, GNIS IDs, flow direction
-  - Recommended for US watersheds
+These layers are produced by `download_fairfax_hydro.py` and `prepare_fairfax_hydro.py` (Steps 3 and 4).
 
-Both can be used simultaneously for comparison and validation.
+### Legacy Stream Workflows
+
+If you need the previous DEM-derived or NHD-based stream pipelines, keep following this guide but refer to [Hydrology Data](data/STREAMS.md) for the detailed extraction steps. Those pipelines remain supported but are no longer part of the default build.
 
 ## Step 1: Download DEM Data
 
@@ -165,161 +162,65 @@ The script uses WhiteboxTools for all hydrological processing:
 3. `D8FlowAccumulation` for accumulation
 4. `Hillshade`, `Slope`, `Aspect` for terrain
 
-## Step 3a: Extract DEM-Derived Streams
+## Step 3: Download Fairfax Hydrography
 
-DEM-derived streams work globally without requiring external datasets. The workflow uses multi-threshold extraction and filtering to produce high-quality drainage networks.
-
-### Multi-Threshold Stream Extraction
-
-Extract streams at multiple flow accumulation thresholds to capture different scales:
+Fairfax County publishes high-quality hydrography datasets (lines, polygons, and perennial streams) via ArcGIS REST services. Use the helper script to download, clip, and reproject them into WGS84.
 
 ```bash
-# Extract at threshold 100 (finest detail)
-python scripts/prepare_streams.py \
-  --flow-acc data/processed/dem/flow_accumulation.tif \
-  --flow-dir data/processed/dem/flow_direction.tif \
-  --output data/processed/streams_t100.gpkg \
-  --threshold 100
-
-# Extract at threshold 250 (recommended balance)
-python scripts/prepare_streams.py \
-  --flow-acc data/processed/dem/flow_accumulation.tif \
-  --flow-dir data/processed/dem/flow_direction.tif \
-  --output data/processed/streams_t250.gpkg \
-  --threshold 250
-
-# Extract at threshold 500 (medium detail)
-python scripts/prepare_streams.py \
-  --flow-acc data/processed/dem/flow_accumulation.tif \
-  --flow-dir data/processed/dem/flow_direction.tif \
-  --output data/processed/streams_t500.gpkg \
-  --threshold 500
-
-# Extract at threshold 1000 (major streams only)
-python scripts/prepare_streams.py \
-  --flow-acc data/processed/dem/flow_accumulation.tif \
-  --flow-dir data/processed/dem/flow_direction.tif \
-  --output data/processed/streams_t1000.gpkg \
-  --threshold 1000
+python scripts/download_fairfax_hydro.py
 ```
 
-### What The Script Does
+**Creates**:
+- `data/raw/fairfax/water_features_lines.gpkg`
+- `data/raw/fairfax/water_features_polys.gpkg`
+- `data/raw/fairfax/perennial_streams.gpkg`
 
-1. **Extract raster streams**: Uses `ExtractStreams` tool with flow accumulation threshold
-2. **Vectorize**: Converts raster streams to vector lines with `RasterStreamsToVector`
-3. **Compute Strahler order**: Hierarchical stream classification (1 = headwater, 7+ = major river)
-4. **Calculate drainage area**: Converts flow accumulation to km² using cell size
-5. **Calculate segment length**: Measures stream segment length in meters
-6. **Add attributes**: Strahler order, length_m, drainage_area_sqkm
+**Script behavior**:
+- Clips data to the AOI bounding box defined in the script (default: Fairfax County, VA)
+- Reprojects source CRS to EPSG:4326
+- Overwrites existing files so you can rerun the command safely
 
-### Threshold Selection Guide
+**Customization**:
+- Update `AOI_BBOX` for a different project extent
+- Swap dataset URLs in `DATASETS` to target different ArcGIS layers
 
-For 10m DEM (cell size ~100 m²):
+## Step 4: Process Fairfax Hydrography
 
-| Threshold | Drainage Area | Use Case | Detail Level |
-|-----------|---------------|----------|--------------|
-| 100 | ~0.01 km² | Headwater capture, research | Very high, many artifacts |
-| 250 | ~0.025 km² | **Recommended balance** | High detail, fewer artifacts |
-| 500 | ~0.05 km² | Medium detail | Moderate, clean network |
-| 1000 | ~0.1 km² | Major streams | Low detail, perennial only |
-
-For 30m DEM (cell size ~900 m²):
-- Use thresholds 3x lower (e.g., 100 instead of 300)
-- Adjust based on terrain and drainage density
-
-### Filter DEM Artifacts (Recommended)
-
-Remove spurious streams and compute confidence scores:
+Normalize fields, calculate metrics, and write processed GeoPackages consumed by the backend and frontend.
 
 ```bash
-python scripts/filter_dem_streams.py \
-  --input data/processed/streams_t250.gpkg \
-  --output data/processed/streams_dem.gpkg \
-  --min-length 25 \
-  --min-drainage-area 0.01 \
-  --flow-acc data/processed/dem/flow_accumulation.tif
+python scripts/prepare_fairfax_hydro.py
 ```
 
-### Filtering Parameters
+**Creates**:
+- `data/processed/fairfax_water_lines.gpkg`
+- `data/processed/fairfax_water_polys.gpkg`
+- `data/processed/perennial_streams.gpkg`
 
-- `--min-length`: Minimum stream segment length in meters (removes tiny fragments)
-  - Flat terrain: 25-50m
-  - Mountainous: 50-100m
+**What the script does**:
+1. Reads raw Fairfax data from `data/raw/fairfax/`
+2. Reprojects to EPSG:4326 if necessary
+3. Renames fields (e.g., `NAME` → `name`, `TYPE` → `type`)
+4. Adds `data_source` attribution (`"Fairfax County GIS"`)
+5. Computes geometry metrics
+   - Lines: length in kilometers (`length_km`)
+   - Polygons: area in square kilometres (`area_sqkm`)
+6. Writes cleaned layers with standardized schemas (layer names match frontend `vectorLayerId` values)
 
-- `--min-drainage-area`: Minimum drainage area in km² (removes unlikely headwaters)
-  - Urban/developed: 0.01-0.05 km²
-  - Natural watersheds: 0.005-0.01 km²
+**Verification**:
+- `ogrinfo data/processed/fairfax_water_lines.gpkg -al -so`
+- Ensure geometry types (LineString/Polygon) and CRS (EPSG:4326) are correct
 
-- `--flow-acc`: Flow accumulation raster for drainage area calculation
+## Optional: Legacy Stream Workflows
 
-### What Filtering Does
+The previous DEM/NHD stream extraction pipeline is still supported but no longer part of the default workflow. Refer to [docs/data/STREAMS.md](data/STREAMS.md) for detailed instructions if you need to:
+- Generate DEM-derived drainage networks for regions outside Fairfax County
+- Integrate NHD flowlines or other national datasets
+- Produce merged DEM/NHD comparison layers
 
-1. **Length filtering**: Removes segments shorter than threshold
-2. **Drainage area filtering**: Removes streams with implausibly small watersheds
-3. **Geometric filtering**: Detects very straight segments (likely DEM artifacts)
-4. **Sinuosity calculation**: Measures meandering (real streams meander, artifacts are straight)
-5. **Flow persistence classification**: Perennial/Intermittent/Ephemeral based on drainage area
-6. **Confidence scoring**: 0-1 score combining multiple metrics
+## Optional: Process NHD Streams
 
-### Confidence Score Formula
-
-```
-confidence = (
-  normalized_drainage_area * 0.4 +
-  normalized_length * 0.2 +
-  sinuosity_bonus * 0.2 +
-  stream_order_bonus * 0.2
-)
-```
-
-High confidence (>0.7) = likely real stream
-Low confidence (<0.3) = possible DEM artifact
-
-### Flow Persistence Classification
-
-Based on drainage area thresholds:
-
-- **Perennial** (year-round flow): ≥ 5.0 km²
-- **Intermittent** (seasonal flow): 0.5-5.0 km²
-- **Ephemeral** (storm-driven): < 0.5 km²
-
-Adjust thresholds based on climate:
-- Arid regions: Multiply by 2-3x
-- Humid regions: Divide by 2x
-
-### Quality Assurance (Optional)
-
-Generate a QA report to assess network quality:
-
-```bash
-python scripts/qa_stream_network.py \
-  --input data/processed/streams_dem.gpkg \
-  --output reports/stream_qa_report.md
-```
-
-Report includes:
-- Stream count and total length by Strahler order
-- Drainage area distribution histogram
-- Confidence score statistics
-- Sinuosity metrics
-- Flow persistence breakdown
-- Parameter tuning recommendations
-
-### Output
-
-**File**: `data/processed/streams_dem.gpkg`
-
-**Attributes**:
-- `strahler_order`: 1-7 (1 = headwater, 7 = major river)
-- `length_m`: Segment length in meters
-- `drainage_area_sqkm`: Upstream drainage area
-- `sinuosity`: Meandering ratio (>1.0 = meandering)
-- `confidence`: Quality score 0-1
-- `flow_persistence`: Perennial/Intermittent/Ephemeral
-
-## Step 3b: Process NHD Streams (Optional)
-
-For US watersheds, you can use official USGS National Hydrography Dataset streams instead of or in addition to DEM-derived streams.
+For US watersheds, you can still process official USGS National Hydrography Dataset streams and merge them with DEM-derived or Fairfax datasets if needed.
 
 ### Download NHD Data
 
@@ -398,7 +299,7 @@ This creates a merged network showing:
 
 Useful for validation and completeness assessment.
 
-## Step 3c: Process HUC12 Watersheds (Optional)
+## Step 5: Process HUC12 Watersheds (Optional)
 
 Add USGS Hydrologic Unit Code (HUC12) watershed boundaries as a reference layer.
 
@@ -472,7 +373,7 @@ HUC12 boundaries are useful for:
 - Labeling watersheds by name/code
 - Regional watershed selection
 
-## Step 4: Generate Contours (Optional)
+## Step 6: Generate Contours (Optional)
 
 Generate elevation contour lines from the filled DEM:
 
@@ -528,7 +429,7 @@ Style differently in the map (bolder line, labels).
 
 **Processing time**: ~30 seconds - 2 minutes depending on DEM size and interval
 
-## Step 5: Generate Web Tiles
+## Step 7: Generate Web Tiles
 
 Convert all rasters and vectors to PMTiles for web serving:
 
@@ -624,8 +525,9 @@ In `data/tiles/`:
 | `slope.pmtiles` | Raster | 10-20 MB | 8-17 |
 | `aspect.pmtiles` | Raster | 10-20 MB | 8-17 |
 | `contours.pmtiles` | Vector | 5-15 MB | 8-17 |
-| `streams_dem.pmtiles` | Vector | 2-8 MB | 8-17 |
-| `streams_nhd.pmtiles` | Vector | 3-10 MB | 8-17 |
+| `fairfax_water_lines.pmtiles` | Vector | 2-4 MB | 8-17 |
+| `fairfax_water_polys.pmtiles` | Vector | 2-4 MB | 8-17 |
+| `perennial_streams.pmtiles` | Vector | 2-3 MB | 8-17 |
 | `huc12.pmtiles` | Vector | 1-5 MB | 8-14 |
 
 Sizes vary based on area extent, terrain complexity, and zoom range.
@@ -650,11 +552,14 @@ pmtiles show data/tiles/hillshade.pmtiles
 # Should show: tile type: png, tile compression: png, max zoom: 17
 
 # Verify vector layer names
-pmtiles show data/tiles/streams_dem.pmtiles
-# Should show: tile type: mvt, layer name: streams
+pmtiles show data/tiles/fairfax_water_lines.pmtiles
+# Should show: tile type: mvt, layer name: fairfax_water_lines
 
-pmtiles show data/tiles/streams_nhd.pmtiles
-# Should show: layer name: streams_nhd
+pmtiles show data/tiles/fairfax_water_polys.pmtiles
+# Should show: layer name: fairfax_water_polys
+
+pmtiles show data/tiles/perennial_streams.pmtiles
+# Should show: layer name: perennial_streams
 
 pmtiles show data/tiles/huc12.pmtiles
 # Should show: layer name: huc12
@@ -665,13 +570,13 @@ pmtiles show data/tiles/huc12.pmtiles
 **IMPORTANT**: The vector layer name inside PMTiles must match the `vectorLayerId` configured in `frontend/src/lib/config/layers.ts`.
 
 For example:
-- `streams_dem.pmtiles` has internal layer name `streams`
-- `streams_nhd.pmtiles` has internal layer name `streams_nhd`
-- Config must specify correct vectorLayerId for each
+- `fairfax_water_lines.pmtiles` has internal layer name `fairfax_water_lines`
+- `fairfax_water_polys.pmtiles` has internal layer name `fairfax_water_polys`
+- Config must specify matching `vectorLayerId` values in `layers.ts`
 
-## Step 6: Add Geology Data (Optional)
+## Step 8: Add Geology Data (Optional)
 
-**Note**: The geology layer is fully supported in the UI as of v1.5.0. Providing geology data enables map overlays, Feature Info results, and cross-section geology contact counts.
+**Note**: The geology layer is fully supported in the UI as of v1.7.0. Providing geology data enables map overlays, Feature Info results, and cross-section geology contact counts.
 
 ### Download Geology
 
@@ -858,15 +763,16 @@ ls -lh data/processed/dem/
 # Should see: filled_dem.tif, flow_direction.tif, flow_accumulation.tif,
 #             hillshade.tif, slope.tif, aspect.tif
 
-# Check stream outputs
-ls -lh data/processed/*.gpkg
-# Should see: streams_dem.gpkg (and optionally streams_nhd.gpkg, huc12.gpkg)
+# Check Fairfax hydro outputs
+ls -lh data/processed/fairfax*.gpkg data/processed/perennial_streams.gpkg
+# Should see: fairfax_water_lines.gpkg, fairfax_water_polys.gpkg, perennial_streams.gpkg (plus huc12.gpkg if processed)
 
 # Check PMTiles
 ls -lh data/tiles/*.pmtiles
 # Should see: hillshade.pmtiles, slope.pmtiles, aspect.pmtiles,
-#             contours.pmtiles, streams_dem.pmtiles
-# Optionally: streams_nhd.pmtiles, huc12.pmtiles
+#             contours.pmtiles, fairfax_water_lines.pmtiles,
+#             fairfax_water_polys.pmtiles, perennial_streams.pmtiles
+# Optionally: huc12.pmtiles
 ```
 
 ### Check File Sizes
@@ -883,8 +789,9 @@ hillshade.pmtiles: 15-30 MB
 slope.pmtiles: 10-20 MB
 aspect.pmtiles: 10-20 MB
 contours.pmtiles: 5-15 MB
-streams_dem.pmtiles: 2-8 MB
-streams_nhd.pmtiles: 3-10 MB
+fairfax_water_lines.pmtiles: 2-4 MB
+fairfax_water_polys.pmtiles: 2-4 MB
+perennial_streams.pmtiles: 2-3 MB
 huc12.pmtiles: 1-5 MB
 ```
 
@@ -898,8 +805,8 @@ pmtiles show data/tiles/hillshade.pmtiles
 # Must show: tile type: png, format: png, max zoom: 17
 
 # Check vector layer names
-pmtiles show data/tiles/streams_dem.pmtiles | grep "layer"
-# Must show correct layer name (streams, streams_nhd, etc.)
+pmtiles show data/tiles/fairfax_water_lines.pmtiles | grep "layer"
+# Must show correct layer name (e.g., fairfax_water_lines, fairfax_water_polys)
 
 # Verify bounds
 pmtiles show data/tiles/hillshade.pmtiles | grep "bounds"

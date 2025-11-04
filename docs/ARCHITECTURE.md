@@ -1,6 +1,6 @@
 # Architecture Overview
 
-**Version**: 1.5.0
+**Version**: 1.7.0
 
 This document describes the technical architecture of the Hydro-Map application, including system components, data flow, and implementation details.
 
@@ -149,8 +149,9 @@ layers: LayersState = {
   hillshade: { visible: boolean, opacity: number },
   slope: { visible: boolean, opacity: number },
   aspect: { visible: boolean, opacity: number },
-  'streams-nhd': { visible: boolean, opacity: number },
-  'streams-dem': { visible: boolean, opacity: number },
+  'fairfax-water-lines': { visible: boolean, opacity: number },
+  'fairfax-water-polys': { visible: boolean, opacity: number },
+  'perennial-streams': { visible: boolean, opacity: number },
   contours: { visible: boolean, opacity: number },
   huc12: { visible: boolean, opacity: number },
   'huc12-fill': { visible: boolean, opacity: number },    // Sub-layer
@@ -201,7 +202,7 @@ panelStates: {
 // Layer group expansion states (localStorage-backed)
 layerGroupStates: {
   terrain: boolean,    // Terrain group (hillshade, slope, aspect, contours)
-  hydrology: boolean   // Hydrology group (streams-nhd, streams-dem, huc12)
+  hydrology: boolean   // Hydrology group (TWI, Fairfax water layers, perennial streams)
 }
 ```
 
@@ -232,13 +233,17 @@ sources: {
     url: 'pmtiles:///tiles/aspect.pmtiles',
     tileSize: 256
   },
-  'streams-nhd': {
+  'fairfax-water-lines': {
     type: 'vector',
-    url: 'pmtiles:///tiles/streams_nhd.pmtiles'
+    url: 'pmtiles:///tiles/fairfax_water_lines.pmtiles'
   },
-  'streams-dem': {
+  'fairfax-water-polys': {
     type: 'vector',
-    url: 'pmtiles:///tiles/streams_dem.pmtiles'
+    url: 'pmtiles:///tiles/fairfax_water_polys.pmtiles'
+  },
+  'perennial-streams': {
+    type: 'vector',
+    url: 'pmtiles:///tiles/perennial_streams.pmtiles'
   },
   contours: {
     type: 'vector',
@@ -254,7 +259,7 @@ sources: {
 **Layer Rendering Order** (bottom to top):
 1. Raster terrain layers (hillshade, slope, aspect)
 2. Vector contours
-3. Vector streams (NHD and DEM-derived)
+3. Fairfax water polygons → Fairfax water lines → Perennial streams
 4. HUC12 watersheds (fill, outline, labels)
 
 ## Backend Architecture
@@ -400,29 +405,38 @@ Generate elevation profile along a line.
 ```
 
 #### `POST /api/feature-info`
-Query nearby streams and geology attributes for a clicked location.
+Query geology, watershed, and DEM attributes around a clicked location.
 
 **Request**:
 ```json
 {
-  "lat": 37.7749,
-  "lon": -122.4194,
-  "layers": ["streams"],
-  "buffer_m": 50
+  "lat": 38.8732,
+  "lon": -77.2716,
+  "layers": ["geology", "huc12"],
+  "buffer_m": 25
 }
 ```
 
 **Response**:
 ```json
 {
-  "streams": [
+  "geology": [
     {
-      "name": "Alameda Creek",
-      "strahler_order": 4,
-      "length_km": 25.3,
-      "drainage_area_sqkm": 150.2
+      "formation": "Occoquan Granite",
+      "rock_type": "Granite",
+      "age": "Late Ordovician"
     }
-  ]
+  ],
+  "huc12": {
+    "huc12": "020700080204",
+    "name": "Difficult Run-Accotink Creek",
+    "area_sqkm": 73.1
+  },
+  "dem_samples": {
+    "elevation_m": 92.6,
+    "slope_degrees": 4.8,
+    "aspect_degrees": 182.0
+  }
 }
 ```
 
@@ -486,10 +500,10 @@ Elevation sampling and profile generation:
 #### `routes/features.py`
 Spatial queries for feature info:
 
-1. Load vector datasets (streams.gpkg) on demand
+1. Load datasets configured in `LAYER_DATASET_MAP` (geology, huc12, Fairfax hydro, etc.)
 2. Buffer point by specified radius
 3. Intersect with vector geometries
-4. Extract and return feature attributes
+4. Extract and return feature attributes (geology, watershed, DEM samples, custom layers)
 
 ## Data Pipeline
 
@@ -519,37 +533,39 @@ Raw DEM (elevation.tif)
     └─> Generate contours (gdal_contour)
             └─> contours.gpkg
 
-Flow accumulation + Flow direction
+Fairfax GIS Services
     │
-    ├─> Extract DEM-derived streams (multi-threshold)
-    │       ├─> streams_t100.gpkg   (threshold 100)
-    │       ├─> streams_t250.gpkg   (threshold 250)
-    │       ├─> streams_t500.gpkg   (threshold 500)
-    │       └─> streams_t1000.gpkg  (threshold 1000)
+    ├─> download_fairfax_hydro.py
+    │       ├─> water_features_lines.gpkg
+    │       ├─> water_features_polys.gpkg
+    │       └─> perennial_streams.gpkg
     │
-    └─> Filter and merge streams
-            └─> streams_dem.gpkg (final)
+    └─> prepare_fairfax_hydro.py
+            ├─> fairfax_water_lines.gpkg
+            ├─> fairfax_water_polys.gpkg
+            └─> perennial_streams.gpkg
 
-NHD Data (Flowlines)
+(Optional) Legacy stream workflows
     │
-    └─> Process NHD streams
-            └─> streams_nhd.gpkg
+    ├─> DEM-derived extraction (prepare_streams.py → streams_dem.gpkg)
+    └─> NHD processing (process_nhd.py → streams_nhd.gpkg)
 
 HUC12 Data (Watershed Boundary Dataset)
     │
     └─> Process HUC12 boundaries
             └─> huc12.gpkg
 
-Terrain rasters + Stream vectors + HUC12
+Terrain rasters + Fairfax hydro + HUC12 + (optional legacy streams)
     │
     └─> Generate PMTiles
             ├─> hillshade.pmtiles       (raster, z8-17)
             ├─> slope.pmtiles           (raster, z8-17)
             ├─> aspect.pmtiles          (raster, z8-17)
-            ├─> contours.pmtiles        (vector, z8-17)
-            ├─> streams_nhd.pmtiles     (vector, z8-17)
-            ├─> streams_dem.pmtiles     (vector, z8-17)
-            └─> huc12.pmtiles           (vector, z8-14)
+            ├─> contours.pmtiles              (vector, z8-17)
+            ├─> fairfax_water_lines.pmtiles  (vector, z8-17)
+            ├─> fairfax_water_polys.pmtiles  (vector, z8-17)
+            ├─> perennial_streams.pmtiles    (vector, z8-17)
+            └─> huc12.pmtiles                (vector, z8-14)
 ```
 
 ### WhiteboxTools Integration
@@ -561,8 +577,7 @@ Terrain rasters + Stream vectors + HUC12
 **Flow Analysis**:
 - `D8Pointer`: Computes single flow direction per cell (8 directions)
 - `D8FlowAccumulation`: Counts upstream contributing cells
-- `ExtractStreams`: Creates raster stream network from accumulation
-- `RasterStreamsToVector`: Converts raster streams to vector lines
+- *(Legacy)* `ExtractStreams` / `RasterStreamsToVector`: Used only for DEM-derived stream workflow
 
 **Terrain Analysis**:
 - `Hillshade`: Shaded relief visualization
@@ -596,16 +611,16 @@ pmtiles convert hillshade.mbtiles hillshade.pmtiles
 **Vector Tiles** (Tippecanoe):
 ```bash
 # Convert GeoPackage to GeoJSON
-ogr2ogr -f GeoJSON streams.geojson streams.gpkg
+ogr2ogr -f GeoJSON fairfax_water_lines.geojson data/processed/fairfax_water_lines.gpkg fairfax_water_lines
 
 # Generate MBTiles
-tippecanoe -o streams.mbtiles -l streams -z 17 -Z 8 \
+tippecanoe -o fairfax_water_lines.mbtiles -l fairfax_water_lines -z 17 -Z 8 \
   --no-feature-reduction \
   --no-tile-size-limit \
-  streams.geojson
+  fairfax_water_lines.geojson
 
 # Convert to PMTiles
-pmtiles convert streams.mbtiles streams.pmtiles
+pmtiles convert fairfax_water_lines.mbtiles fairfax_water_lines.pmtiles
 ```
 
 **PMTiles Verification**:
@@ -614,8 +629,8 @@ pmtiles convert streams.mbtiles streams.pmtiles
 pmtiles show hillshade.pmtiles
 # Should show: tile type: png, format png, max zoom: 17
 
-pmtiles show streams.pmtiles
-# Should show: tile type: mvt, layer name: streams
+pmtiles show fairfax_water_lines.pmtiles
+# Should show: tile type: mvt, layer name: fairfax_water_lines
 ```
 
 ## Data Flow
@@ -739,13 +754,24 @@ export const LAYER_SOURCES: LayerSource[] = [
     description: 'Shaded relief visualization of terrain'
   },
   {
-    id: 'streams-nhd',
-    label: 'Real Streams',
-    filename: 'streams_nhd.pmtiles',
+    id: 'fairfax-water-lines',
+    label: 'Fairfax Water Features (Lines)',
+    filename: 'fairfax_water_lines.pmtiles',
     type: 'vector',
-    vectorLayerId: 'streams_nhd',  // Actual layer name in PMTiles
-    defaultVisible: true,
-    defaultOpacity: 1.0,
+    vectorLayerId: 'fairfax_water_lines',
+    defaultVisible: false,
+    defaultOpacity: 0.8,
+    category: 'hydrology',
+    paintProperties: { /* MapLibre paint config */ }
+  },
+  {
+    id: 'perennial-streams',
+    label: 'Fairfax Perennial Streams',
+    filename: 'perennial_streams.pmtiles',
+    type: 'vector',
+    vectorLayerId: 'perennial_streams',
+    defaultVisible: false,
+    defaultOpacity: 0.8,
     category: 'hydrology',
     paintProperties: { /* MapLibre paint config */ }
   },
@@ -765,27 +791,26 @@ export const LAYER_SOURCES: LayerSource[] = [
 2. Add layer configuration to LAYER_SOURCES in `layers.ts`
 3. Map and UI automatically update - no manual Map.svelte edits needed
 
-### Dual Stream Network Architecture (v1.1.1)
+### Fairfax Hydrography Layers
 
-**Two distinct stream layers**:
+The default hydrology configuration ships with Fairfax County data:
 
-1. **streams-nhd** (Real Streams):
-   - Source: National Hydrography Dataset (NHD)
-   - PMTiles: `streams_nhd.pmtiles`
-   - Vector layer ID: `streams_nhd`
-   - Default visible: Yes
-   - Color: Dark blue (#1e3a8a)
-   - Use case: Official, curated stream network
+1. **fairfax-water-lines**
+   - PMTiles: `fairfax_water_lines.pmtiles`
+   - Attributes: `name`, `type`, `length_km`, `data_source`
+   - Styled by `type` to highlight streams, channels, ditches, canals
 
-2. **streams-dem** (DEM-Derived Streams):
-   - Source: Pure DEM flow accumulation extraction
-   - PMTiles: `streams_dem.pmtiles`
-   - Vector layer ID: `streams`
-   - Default visible: No
-   - Color: Gradient by drainage area (light → dark blue)
-   - Use case: Calculated drainage network, shows ephemeral channels
+2. **fairfax-water-polys**
+   - PMTiles: `fairfax_water_polys.pmtiles`
+  - Attributes: `name`, `type`, `area_sqkm`, `data_source`
+   - Filled polygons for ponds, lakes, reservoirs
 
-**Both layers** can be toggled independently in the UI, allowing users to compare official vs. calculated stream networks.
+3. **perennial-streams**
+   - PMTiles: `perennial_streams.pmtiles`
+   - Attributes: `name`, `feature_type`, `length_km`
+   - Deep-blue overlay emphasising perennial-only network
+
+Topographic Wetness Index (TWI) complements these layers for modeled wetness. Legacy DEM/NHD streams can still be added by extending `LAYER_SOURCES`.
 
 ### HUC12 Multi-Layer Pattern
 

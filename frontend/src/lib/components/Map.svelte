@@ -186,8 +186,8 @@ function headerToBounds(header: any): TileHeaderBounds {
 			};
 
 			if (!centerWithinCoverage()) {
-				// Prefer NHD streams coverage if available, else any available header
-				const preferred = tileMetadata.get('streams-nhd')?.header || tileMetadata.get('streams-dem')?.header || Array.from(tileMetadata.values()).find(m => m.header)?.header;
+				// Use any available tile header for coverage
+				const preferred = Array.from(tileMetadata.values()).find(m => m.header)?.header;
 				if (preferred) {
 					initialCenter = [
 						(preferred.minLon + preferred.maxLon) / 2,
@@ -504,6 +504,20 @@ function headerToBounds(header: any): TileHeaderBounds {
 						}
 					}
 				);
+			} else if (layer.id === 'fairfax-water-polys') {
+				// Special handling for fairfax-water-polys (polygon layer)
+				configuredLayers.push({
+					id: 'fairfax-water-polys',
+					type: 'fill',
+					source: 'fairfax-water-polys',
+					'source-layer': 'fairfax_water_polys',
+					layout: { visibility: layer.defaultVisible ? 'visible' : 'none' },
+					paint: {
+						'fill-color': layer.paintProperties?.['fill-color'] || '#0891b2',
+						'fill-opacity': layer.paintProperties?.['fill-opacity'] || 0.6,
+						'fill-outline-color': layer.paintProperties?.['fill-outline-color'] || '#075985'
+					}
+				});
 			} else {
 				// Standard layer from configuration
 				const mapLayer: any = {
@@ -517,14 +531,7 @@ function headerToBounds(header: any): TileHeaderBounds {
 
 				// Add source-layer for vector layers
 				if (layer.type === 'vector' && layer.vectorLayerId) {
-					// Fix for stream layer IDs
-					if (layer.id === 'streams-nhd') {
-						mapLayer['source-layer'] = 'streams_nhd'; // Actual layer in PMTiles
-					} else if (layer.id === 'streams-dem') {
-						mapLayer['source-layer'] = 'streams'; // Actual layer in PMTiles
-					} else {
-						mapLayer['source-layer'] = layer.vectorLayerId;
-					}
+					mapLayer['source-layer'] = layer.vectorLayerId;
 				}
 
 				// Add paint properties
@@ -991,7 +998,7 @@ async function initializeTileStatus() {
 			pmtilesProtocol?.add(pmtiles);
 
 			// Verify vector layer metadata for vector tiles
-			if (src.id === 'streams-nhd' || src.id === 'streams-dem' || src.id === 'contours' || src.id === 'huc12') {
+			if (src.id === 'contours' || src.id === 'huc12') {
 				try {
 					const metadata: any = await pmtiles.getMetadata();
 					if (metadata && metadata.vector_layers) {

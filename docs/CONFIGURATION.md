@@ -1,6 +1,6 @@
 # Configuration Guide
 
-**Version**: 1.5.0
+**Version**: 1.7.0
 
 ## Overview
 
@@ -61,14 +61,18 @@ FLOW_DIR_PATH=../data/processed/dem/flow_direction.tif
 FLOW_ACC_PATH=../data/processed/dem/flow_accumulation.tif
 
 # Vector data
-STREAMS_PATH=../data/processed/streams.gpkg
 GEOLOGY_PATH=../data/processed/geology.gpkg
+HUC12_PATH=../data/processed/huc12.gpkg
 ```
 
 **Path resolution**:
 - Relative paths: Resolved relative to `backend/` directory
 - Absolute paths: Used as-is
 - Docker: Mount data volume at `/app/data` and use `./data/processed/...`
+
+**Fairfax hydrography**:
+- Processed outputs live at `data/processed/fairfax_water_lines.gpkg`, `data/processed/fairfax_water_polys.gpkg`, and `data/processed/perennial_streams.gpkg`
+- These paths are referenced via `LAYER_DATASET_MAP` (see below) rather than dedicated environment variables
 
 #### Watershed Delineation
 
@@ -172,8 +176,16 @@ class Settings(BaseSettings):
     DEM_PATH: str = "../data/processed/dem/filled_dem.tif"
     FLOW_DIR_PATH: str = "../data/processed/dem/flow_direction.tif"
     FLOW_ACC_PATH: str = "../data/processed/dem/flow_accumulation.tif"
-    STREAMS_PATH: str = "../data/processed/streams.gpkg"
     GEOLOGY_PATH: str = "../data/processed/geology.gpkg"
+    HUC12_PATH: str = "../data/processed/huc12.gpkg"
+
+    # Dataset map (frontend layer ID → (file path, layer name))
+    LAYER_DATASET_MAP: dict = {
+        "geology": ("../data/processed/geology.gpkg", None),
+        "huc12": ("../data/processed/huc12.gpkg", None),
+        "fairfax-water-lines": ("../data/processed/fairfax_water_lines.gpkg", "fairfax_water_lines"),
+        "fairfax-water-polys": ("../data/processed/fairfax_water_polys.gpkg", "fairfax_water_polys")
+    }
 
     # Watershed settings
     SNAP_TO_STREAM: bool = True
@@ -364,11 +376,11 @@ Layers are rendered in **array order** (first = bottom, last = top):
 
 **Check internal layer name**:
 ```bash
-pmtiles show data/tiles/streams_nhd.pmtiles | grep "layer ID"
+pmtiles show data/tiles/fairfax_water_lines.pmtiles | grep "layer"
 ```
 
 **Common mistakes**:
-- `vectorLayerId: 'streams'` but PMTiles contains `streams_t250_filtered` → layer won't render
+- `vectorLayerId: 'fairfax_water_lines'` but PMTiles contains `Water_Features_lines` → layer won't render
 - Forgetting to set `vectorLayerId` for vector sources → layer won't render
 
 **Fix**: Regenerate tiles with correct internal layer name, or update `vectorLayerId` in config.
@@ -386,24 +398,24 @@ hydro-map/
 ├── data/
 │   ├── raw/                    # Original source data
 │   │   ├── dem/
-│   │   ├── nhd/
-│   │   └── wbd/
+│   │   └── fairfax/
 │   ├── processed/              # Prepared data for backend
 │   │   ├── dem/
 │   │   │   ├── filled_dem.tif
 │   │   │   ├── flow_direction.tif
 │   │   │   └── flow_accumulation.tif
-│   │   ├── streams_nhd.gpkg
-│   │   ├── streams_dem.gpkg
+│   │   ├── fairfax_water_lines.gpkg
+│   │   ├── fairfax_water_polys.gpkg
+│   │   ├── perennial_streams.gpkg
 │   │   ├── huc12.gpkg
 │   │   └── geology.gpkg
 │   ├── tiles/                  # PMTiles for frontend
 │   │   ├── hillshade.pmtiles
 │   │   ├── slope.pmtiles
 │   │   ├── aspect.pmtiles
-│   │   ├── streams_nhd.pmtiles
-│   │   ├── streams_dem.pmtiles
-│   │   ├── flow_accum.pmtiles
+│   │   ├── fairfax_water_lines.pmtiles
+│   │   ├── fairfax_water_polys.pmtiles
+│   │   ├── perennial_streams.pmtiles
 │   │   ├── contours.pmtiles
 │   │   └── huc12.pmtiles
 │   └── cache/                  # Delineation cache
@@ -492,7 +504,7 @@ Typical response times (10m DEM, 10 km² watershed):
 
 **Optimize tile sizes**:
 - Raster tiles: z8-z17 (balance detail vs file size)
-- Vector tiles: z8-z17 for streams, z8-z14 for large polygons
+- Vector tiles: z8-z17 for Fairfax water lines/perennial streams, z8-z14 for large polygons (HUC12, water bodies)
 
 **Check tile file sizes**:
 ```bash
@@ -503,7 +515,8 @@ Typical sizes:
 - Hillshade (z8-z17): 20-30 MB
 - Slope (z8-z17): 5-10 MB
 - Aspect (z8-z17): 5-10 MB
-- Streams (z8-z17): 2-5 MB
+- Fairfax water lines (z8-z17): 2-4 MB
+- Fairfax water polygons (z8-z14): 1-3 MB
 - HUC12 (z8-z14): 1-3 MB
 
 **If tiles are too large**:

@@ -186,32 +186,10 @@ async def get_feature_info(request: FeatureInfoRequest):
     of the clicked point and returns feature attributes.
     """
     point = Point(request.lon, request.lat)
-    layers_to_query = request.layers or ["streams-nhd", "geology"]
+    layers_to_query = request.layers or ["geology"]
 
     features = {}
     all_warnings = []
-
-    # Query streams (supports both streams-nhd and streams-dem)
-    stream_layers = [l for l in layers_to_query if l.startswith("streams")]
-    if stream_layers:
-        all_stream_features = []
-        for layer_id in stream_layers:
-            stream_features, warnings = await query_streams(point, request.buffer, layer_id)
-            all_warnings.extend(warnings)
-            if stream_features:
-                all_stream_features.extend(stream_features)
-
-        if all_stream_features:
-            # Sort by distance and limit to top 3
-            all_stream_features.sort(key=lambda x: x['distance_meters'])
-            features["streams"] = all_stream_features[:3]
-
-    # Legacy support for "streams" layer (maps to streams-nhd)
-    if "streams" in layers_to_query and not stream_layers:
-        streams_features, warnings = await query_streams(point, request.buffer, "streams-nhd")
-        all_warnings.extend(warnings)
-        if streams_features:
-            features["streams"] = streams_features
 
     # Query geology
     if "geology" in layers_to_query:

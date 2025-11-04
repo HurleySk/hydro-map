@@ -1,11 +1,11 @@
 # Hydro-Map Documentation
 
-**Version**: 1.5.0
-**Last Updated**: 2025-11-04
+**Version**: 1.7.0
+**Last Updated**: 2025-12-15
 
 ## Welcome
 
-This is the complete documentation for Hydro-Map, a web-based hydrological analysis tool for watershed delineation, stream network visualization, and terrain analysis.
+This is the complete documentation for Hydro-Map, a web-based hydrological analysis tool for watershed delineation, terrain analysis, and regional hydrography visualization.
 
 ## Documentation Structure
 
@@ -45,14 +45,14 @@ Documentation is organized into guides for different audiences and use cases:
 
 - **[Data Preparation](DATA_PREPARATION.md)** - Complete data processing guide
   - DEM preparation
-  - DEM-derived stream extraction
-  - NHD stream processing
+  - Fairfax County hydrography download & normalization
+  - Optional DEM/NHD stream extraction (legacy)
   - HUC12 watershed boundaries
   - Tile generation
 
 - **[Tile Generation](tile-generation.md)** - PMTiles creation reference
-  - Raster tiles (hillshade, slope, aspect)
-  - Vector tiles (streams, contours, HUC12)
+  - Raster tiles (hillshade, slope, aspect, TWI)
+  - Vector tiles (Fairfax hydro, contours, HUC12, geology)
   - Critical technical notes
   - Verification and troubleshooting
 
@@ -101,13 +101,10 @@ Documentation is organized into guides for different audiences and use cases:
 
 **Deep dives into specific topics:**
 
-- **[Stream Network Data](data/STREAMS.md)** - DEM-derived stream methodology
-  - Flow accumulation analysis
-  - Multi-threshold extraction
-  - Artifact filtering
-  - Flow persistence classification
-  - Confidence scoring
-  - Quality assurance
+- **[Hydrology Data](data/STREAMS.md)** - Fairfax open-data workflow and legacy DEM-derived stream methodology
+  - Fairfax County water feature pipeline
+  - Optional DEM/NHD extraction process
+  - Quality assurance considerations
 
 ## Quick Reference
 
@@ -117,7 +114,9 @@ Documentation is organized into guides for different audiences and use cases:
 |------|---------------|---------------|
 | Install dependencies | [Quick Start](QUICK_START.md#prerequisites) | `pip install -r requirements.txt` |
 | Process DEM | [Data Preparation](DATA_PREPARATION.md#step-1-dem-preparation) | `python scripts/prepare_dem.py` |
-| Extract streams | [Data Preparation](DATA_PREPARATION.md#step-3a-dem-derived-streams) | `python scripts/prepare_streams.py` |
+| Download Fairfax hydro data | [Data Preparation](DATA_PREPARATION.md#step-3-download-fairfax-hydrography) | `python scripts/download_fairfax_hydro.py` |
+| Process Fairfax hydro data | [Data Preparation](DATA_PREPARATION.md#step-4-process-fairfax-hydrography) | `python scripts/prepare_fairfax_hydro.py` |
+| (Optional) Extract DEM streams | [Hydrology Data](data/STREAMS.md) | `python scripts/prepare_streams.py` |
 | Generate tiles | [Tile Generation](tile-generation.md) | `python scripts/generate_tiles.py` |
 | Start backend | [Quick Start](QUICK_START.md#running-the-application) | `uvicorn app.main:app --reload` |
 | Start frontend | [Quick Start](QUICK_START.md#running-the-application) | `npm run dev` |
@@ -144,10 +143,10 @@ Documentation is organized into guides for different audiences and use cases:
 - Fill/breach depressions → Flow direction → Flow accumulation → Stream extraction
 - See [Data Preparation](DATA_PREPARATION.md#step-1-dem-preparation)
 
-**Dual Stream Networks** (v1.1.1+):
-- **Real Streams** (streams-nhd): NHD-based, US only, curated with names
-- **Drainage Network** (streams-dem): DEM-derived, global coverage, calculated
-- See [Stream Network Data](data/STREAMS.md)
+**Fairfax Hydrography (current default)**:
+- Fairfax County line and polygon water features prepared via new download/prepare scripts
+- Optional perennial stream overlay derived from Fairfax open data
+- See [Hydrology Data](data/STREAMS.md)
 
 **Topographic Wetness Index** (v1.4.0+):
 - Generated via `scripts/compute_twi.py` + `scripts/process_twi_for_tiles.py`
@@ -166,23 +165,23 @@ Documentation is organized into guides for different audiences and use cases:
 
 ## Version Information
 
-### Current Version: 1.5.0
+### Current Version: 1.7.0
 
-**Release Date**: 2025-11-04
+**Release Date**: 2025-12-15
 
 **Key Features**:
+- Fairfax County hydrography layers (lines, polygons, perennial streams) downloadable via new scripts
+- Feature Info responses simplified to geology, watershed, and DEM context with adjustable buffers
+- Documentation refreshed to reflect Fairfax-first hydrology workflow and revised layer groups
 - Geology layer fully enabled with colorblind-safe textures and automatic legend display
-- Feature Info tool with adjustable query buffer and automatic geology lookups
 - Cross-section results enhanced with distance metrics, sample counts, and geology contact totals
-- Dual stream network support (NHD + DEM-derived)
-- Centralized layer configuration (LAYER_SOURCES) powering Map and Layer panels
 - Tile status monitoring via the System Status panel
 
-**See**: [CHANGELOG.md](../CHANGELOG.md) for complete version history
+**See**: [CHANGELOG.md](../CHANGELOG.md) for complete version history and Fairfax dataset milestones
 
 ### Recent Changes
 
-- **v1.5.0** (2025-11-04): Geology layer fully enabled, Feature Info buffer control, cross-section geology metrics
+- **v1.7.0** (2025-12-15): Fairfax hydrography workflow, streamlined Feature Info responses, docs refresh
 - **v1.4.0** (2025-11-02): Documentation refresh and TWI layer release
 - **v1.3.0** (2025-11-02): Stadia Maps vector basemaps with feature-rich POI display, water accumulation heatmap
 - **v1.2.1** (2025-11-02): Documentation overhaul
@@ -340,4 +339,4 @@ Hydro-Map is open source software. See LICENSE file in the project root for deta
 
 **Questions or feedback?** Open an issue at https://github.com/HurleySk/hydro-map/issues
 
-**Last updated**: 2025-11-04 | **Version**: 1.5.0
+**Last updated**: 2025-12-15 | **Version**: 1.7.0

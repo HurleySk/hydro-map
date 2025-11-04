@@ -126,9 +126,9 @@ export interface LayerGroupStates {
 }
 
 export const layerGroupStates = createPersistedStore<LayerGroupStates>('layer-group-states', {
-	terrain: false,    // Collapsed by default
-	hydrology: true,   // Expanded by default
-	reference: true    // Expanded to show geology controls
+	terrain: false,           // Collapsed by default
+	hydrology: true,          // Expanded by default (includes Fairfax layers)
+	reference: true           // Expanded to show geology controls
 });
 
 // Basemap style selection

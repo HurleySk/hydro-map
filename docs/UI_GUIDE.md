@@ -1,6 +1,6 @@
 # User Interface Guide
 
-**Version**: 1.5.0
+**Version**: 1.7.0
 
 ## Overview
 
@@ -77,10 +77,11 @@ Layers are organized into collapsible groups:
 - **Aspect**: Directional color map showing slope orientation (N/E/S/W)
 - **Contours**: 10 m elevation contour lines derived from the DEM
 
-#### **Hydrology** (3 layers)
-- **Real Streams**: NHD-based stream network (US only, curated data)
-- **Drainage Network**: DEM-derived calculated streams (global coverage)
+#### **Hydrology** (4 layers)
 - **Topographic Wetness Index (TWI)**: Raster portraying likely wet areas (blue gradient; darker = wetter)
+- **Fairfax Water Features (Lines)**: Open-data streams, channels, ditches, and canals from Fairfax County GIS
+- **Fairfax Water Features (Polygons)**: Ponds, lakes, reservoirs, and other water bodies
+- **Fairfax Perennial Streams**: Simplified perennial network derived from county data
 
 #### **Reference** (2 layers)
 - **HUC12 Watersheds**: USGS watershed boundary reference layer with outlines and labels
@@ -98,8 +99,7 @@ Each layer has a checkbox to control visibility:
 - **Unchecked**: Layer is hidden
 
 **Default visibility** (on startup):
-- Real Streams (NHD): ✓ (visible)
-- All other layers: ✗ (hidden until toggled on)
+- Hydrology layers start hidden; enable the ones you need for analysis.
 
 #### Opacity Slider
 
@@ -125,22 +125,21 @@ Click the group header (e.g., "Terrain") to expand or collapse that section:
 ✗ Aspect
 ```
 
-**Stream Comparison**:
+**Hydrology Overview**:
 ```
 ✓ Hillshade (40% opacity)
-✓ Real Streams (100% opacity)
-✓ Drainage Network (70% opacity)
+✓ Topographic Wetness Index (65% opacity)
+✓ Fairfax Water Features (Lines) (80% opacity)
 ```
-*Compare NHD streams with DEM-derived streams to validate accuracy*
+*Blend modeled wetness with observed hydrography*
 
-**Watershed Context**:
+**Waterbody Inventory**:
 ```
-✓ Hillshade (50% opacity)
-✓ Real Streams (100% opacity)
-✓ HUC12 Watersheds (80% opacity)
-✓ Contours (60% opacity)
+✓ Fairfax Water Features (Polygons) (60% opacity)
+✓ Contours (50% opacity)
+✓ HUC12 Watersheds (70% opacity)
 ```
-*Full hydrological context with reference boundaries*
+*Highlight ponds, lakes, and reservoirs within watershed boundaries*
 
 ---
 
@@ -342,7 +341,7 @@ Results are cached by:
 
 ### Tips
 
-- **Use snap**: Snapping to streams ensures pour point is on drainage network
+- **Use snap** (if configured): Stream snapping works only when a stream dataset is available; disable otherwise
 - **Adjust snap radius**: Increase for sparse stream networks, decrease for dense areas
 - **Multiple watersheds**: Compare nested watersheds by clicking upstream points
 - **Check flow accumulation**: Values >1000 cells indicate significant drainage
@@ -448,7 +447,7 @@ Click **"Cancel"** button to exit cross-section mode and clear line.
 ### Tips
 
 - **Hillshade overlay**: Enable hillshade layer to see terrain context while drawing
-- **Follow streams**: Trace stream courses to analyze channel profiles
+- **Follow water lines**: Trace Fairfax Water Lines or Perennial Streams to analyze channel profiles
 - **Perpendicular to contours**: Draw across contours for steepest slopes
 - **Zoom in**: Higher zoom levels (z14-z16) provide better point placement accuracy
 
@@ -480,22 +479,23 @@ Click any location on the map:
 
 #### 3. View Results
 
-**Streams** (if clicked near stream):
-- Name (from NHD) or "Unnamed"
-- Length (km)
-- Drainage area (km²)
-- Stream order (Strahler classification)
-- Stream type (Perennial/Intermittent/Ephemeral for DEM-derived)
-- Upstream length (total network length upstream)
-- Slope (average channel gradient)
-- Elevation range (min/max)
-
 **Geology** (if available and clicked on polygon):
-- Formation name
-- Rock type
-- Geological age
-- Formation description
+- Formation name and optional unit code
+- Rock type and geologic age
+- Data source attribution (e.g., USGS state map, Fairfax GIS)
 - Returned even if the geology layer is toggled off (for contextual awareness)
+
+**Watershed Context** (HUC12):
+- HUC12 code
+- Watershed name
+- Area in square kilometres
+- State abbreviations (if provided in source data)
+
+**DEM Samples**:
+- Elevation (meters)
+- Slope (degrees)
+- Aspect (degrees clockwise from north)
+- Topographic Wetness Index (if generated)
 
 **No features**:
 - Message: "No features found at this location"
@@ -511,7 +511,7 @@ Adjustable: 10-200 m via the slider in the Feature Info panel
 
 If multiple features are within buffer:
 - All features are listed
-- Grouped by type (Streams, Geology)
+- Grouped by type (Geology, Watershed, DEM Samples)
 
 #### 6. Deactivate Tool
 
@@ -520,36 +520,37 @@ Click **"Cancel"** button to exit feature info mode.
 ### Supported Layers
 
 Currently queries:
-- **Streams**: Both NHD and DEM-derived streams
-- **Geology**: If geology data is available
+- **Geology**: Surface geology at the clicked location
+- **HUC12**: Watershed boundaries intersecting the point
+- **DEM Samples**: Terrain derivatives (elevation, slope, aspect, TWI)
 
 **Note**:
-- Other layers (hillshade, slope, aspect, contours, HUC12) are not queryable via feature info tool because they lack click-ready attributes.
-- If both stream layers are hidden, the tool automatically queries **Real Streams** (NHD) to provide context.
+- Other layers (hillshade, slope, aspect, contours, Fairfax hydro) are not queryable via the Feature Info tool.
+- Custom layers can be added by extending `LAYER_DATASET_MAP` in the backend and updating the frontend request list.
 - Geology is queried regardless of layer visibility so rock information is always returned when data is available.
 
 ### Use Cases
 
-**Stream Identification**:
-- Click stream to get name and properties
-- Verify stream order
-- Check drainage area
-
-**Comparing Stream Sources**:
-- Enable both "Real Streams" and "Drainage Network" layers
-- Click same location to see both NHD and DEM-derived attributes
-- Compare drainage area calculations
-
 **Geological Context**:
-- Identify bedrock formations
+- Identify bedrock formations beneath project sites
 - Understand rock types for infiltration analysis
-- Check geological age
+- Check geological age metadata
+
+**Watershed Membership**:
+- Confirm HUC12 code for a project location
+- Estimate upstream catchment size (area_sqkm)
+- Determine state overlap for multi-state watersheds
+
+**Terrain Diagnostics**:
+- Inspect local slope/aspect prior to delineation runs
+- Verify TWI response in low-lying areas
+- Compare sample elevation with cross-section output
 
 ### Tips
 
 - **Zoom in**: More accurate clicking at higher zoom levels
-- **Layer visibility**: Visible stream layers are queried; if none are visible the tool falls back to Real Streams. Geology is queried even when the layer is hidden.
-- **Stream selection**: If clicking doesn't find stream, try zooming in or clicking directly on the blue line
+- **Adjust buffer**: Increase the buffer to capture nearby geology contacts or multiple HUC12 polygons
+- **Layer visibility**: Geology results are returned even when the layer is hidden; other contextual layers remain display-only
 
 ---
 
@@ -588,9 +589,10 @@ Shows status for each PMTiles file:
 - Hillshade (hillshade.pmtiles)
 - Slope (slope.pmtiles)
 - Aspect (aspect.pmtiles)
-- Real Streams (streams_nhd.pmtiles)
-- Drainage Network (streams_dem.pmtiles)
 - Topographic Wetness Index (twi.pmtiles)
+- Fairfax Water Features (Lines) (fairfax_water_lines.pmtiles)
+- Fairfax Water Features (Polygons) (fairfax_water_polys.pmtiles)
+- Fairfax Perennial Streams (perennial_streams.pmtiles)
 - Contours (contours.pmtiles)
 - HUC12 Watersheds (huc12.pmtiles)
 - Geology (geology.pmtiles)
@@ -607,7 +609,7 @@ If tiles show as unavailable:
 
 2. **Regenerate tiles**:
    ```bash
-   python backend/scripts/generate_tiles.py
+   python scripts/generate_tiles.py
    ```
 
 3. **Check backend logs**:
@@ -724,13 +726,12 @@ Currently no keyboard shortcuts for tool activation. Use mouse/touch to click to
 1. Basemap (bottom)
 2. Hillshade
 3. Slope/Aspect
-4. Flow Accumulation
-5. HUC12 fill
-6. Contours
-7. Streams
-8. HUC12 outline
-9. HUC12 labels
-10. Watersheds/Tools (top)
+4. Topographic Wetness Index
+5. Fairfax Water Features (polygons)
+6. Fairfax Water Features (lines)
+7. Fairfax Perennial Streams
+8. HUC12 fill/outline/labels
+9. Watersheds/Tools (delineation, cross-section overlays)
 
 ### Visual Clarity
 
@@ -740,23 +741,21 @@ Currently no keyboard shortcuts for tool activation. Use mouse/touch to click to
 - Toggle layers on/off as needed
 
 **Best combinations**:
-- **Minimal**: Hillshade (50%) + Real Streams (100%) + Basemap None
-- **Detailed**: Hillshade (40%) + Slope (60%) + Real Streams (100%) + Contours (50%)
-- **Validation**: Hillshade (30%) + Real Streams (100%) + Drainage Network (70%)
+- **Minimal**: Hillshade (50%) + Fairfax Perennial Streams (80%) + Basemap None
+- **Detailed**: Hillshade (40%) + TWI (65%) + Fairfax Water Lines (80%) + Contours (50%)
+- **Surface Water Inventory**: Fairfax Water Polygons (60%) + HUC12 (70%) + Basemap Minimal
 
 ### Workflow Optimization
 
 **Delineating multiple watersheds**:
-1. Enable "Snap to nearest stream"
-2. Set snap radius to 200m for regional work
-3. Click multiple points without deactivating tool
-4. Review all watersheds together before clearing
+1. Keep "Snap to nearest stream" disabled unless a stream dataset is configured
+2. Click multiple pour points without deactivating the tool
+3. Review all watersheds together before clearing
 
-**Comparing stream sources**:
-1. Enable both "Real Streams" and "Drainage Network"
-2. Set "Drainage Network" to 70% opacity
-3. Look for disagreements (NHD vs DEM-derived)
-4. Use Feature Info tool to compare attributes
+**Comparing water feature layers**:
+1. Toggle Fairfax Water Lines and Fairfax Perennial Streams together
+2. Lower perennial opacity (~50%) to spot differences
+3. Enable Fairfax Water Polygons to highlight ponds/lakes that align with linework junctions
 
 **Analyzing terrain**:
 1. Start with Hillshade only
@@ -766,10 +765,10 @@ Currently no keyboard shortcuts for tool activation. Use mouse/touch to click to
 
 ### Data Quality Checks
 
-**Verifying stream accuracy**:
-- Compare "Real Streams" (NHD) with "Drainage Network" (DEM-derived)
-- DEM streams should generally align with NHD, but may show additional ephemeral channels
-- Significant disagreement indicates DEM issues or NHD gaps
+**Verifying Fairfax water coverage**:
+- Toggle Fairfax Water Lines against basemaps to confirm alignment with visible channels
+- Compare Fairfax Perennial Streams with water line classifications to ensure expected coverage
+- Use Feature Info geology output to contextualize stream/lake placement
 
 **Checking watershed boundaries**:
 - Watershed should follow topographic divides (ridges)

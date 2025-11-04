@@ -1,20 +1,20 @@
 # Stream Network Data
 
-**Version**: 1.5.0
+**Version**: 1.7.0
 
 ## Overview
 
-Hydro-Map uses a **pure DEM-derived stream network** that works globally without requiring external datasets like NHD (National Hydrography Dataset). This approach:
+Hydro-Map now ships with **Fairfax County hydrography** as the default hydrology dataset. Three layers are generated from Fairfax GIS open data:
 
-- Works anywhere in the world with DEM coverage
-- Provides consistent methodology across regions
-- Includes drainage area as the primary attribute
-- Classifies flow persistence (Perennial/Intermittent/Ephemeral)
-- Computes confidence scores to identify potential artifacts
+- `fairfax_water_lines`: Streams, channels, ditches, and canals
+- `fairfax_water_polys`: Ponds, lakes, and reservoirs
+- `perennial_streams`: Simplified perennial-only network
 
-**Note**: As of v1.1.1, the application supports **both** DEM-derived streams (`streams-dem` layer) AND NHD-based streams (`streams-nhd` layer) simultaneously. Users can toggle between them for comparison or validation.
+Scripts `download_fairfax_hydro.py` and `prepare_fairfax_hydro.py` (Steps 3 & 4 in [DATA_PREPARATION.md](../DATA_PREPARATION.md)) automate download, clipping, reprojection, field normalization, and metric calculation.
 
-## Methodology
+**Need another region?** Swap dataset URLs in the scripts, or use the legacy DEM/NHD extraction workflow described later in this document.
+
+## Legacy DEM-Derived Stream Methodology
 
 ### 1. Flow Accumulation Analysis
 
@@ -440,10 +440,11 @@ See `scripts/workflow_pure_dem_streams.sh` for the full automated pipeline.
 
 ## Updates and Versioning
 
-**Current version**: 1.5.0 (Feature Info fallback ensures stream attributes are always available)
+**Current version**: 1.7.0 (Fairfax hydrography workflow is the default configuration)
 
 **Stream network evolution**:
-- **v1.5.0 (2025-11)**: Feature Info tool now falls back to Real Streams when stream layers are hidden
+- **v1.7.0 (2025-12)**: Fairfax County water features and perennial streams integrated as default hydrology layers
+- **v1.5.0 (2025-11)**: Feature Info tool falls back to stream datasets when available
 - **v1.4.0 (2025-11)**: Documentation alignment with Hydro-Map v1.4.0; no pipeline changes
 - **v1.1.1+ (2025-11)**: Dual stream network - DEM-derived AND NHD-based layers available simultaneously
 - **v1.0 (2025-11)**: Pure DEM implementation with multi-threshold extraction, artifact filtering, and confidence scoring
@@ -457,3 +458,46 @@ See `scripts/workflow_pure_dem_streams.sh` for the full automated pipeline.
 - Integration with global river datasets (e.g., HydroRIVERS) for validation
 - Upstream area calculation for pour points
 - Automated stream name assignment using proximity to NHD features
+## Fairfax Hydrography Layers
+
+### Fairfax Water Features (Lines)
+
+- **Source**: `water_features_lines` ArcGIS REST service
+- **Layer ID**: `fairfax_water_lines`
+- **Key fields**:
+  - `name`: Feature name (if provided)
+  - `type`: Stream, channel, canal, ditch, etc.
+  - `length_km`: Calculated segment length in kilometres (UTM 18N)
+  - `data_source`: Always set to "Fairfax County GIS"
+- **Usage**: Styled by `type` with colour ramp in `frontend/src/lib/config/layers.ts`
+- **API access**: Add `"fairfax-water-lines"` to `LAYER_DATASET_MAP` (already configured by default) to expose via Feature Info
+
+### Fairfax Water Features (Polygons)
+
+- **Source**: `water_features_polys` ArcGIS REST service
+- **Layer ID**: `fairfax_water_polys`
+- **Key fields**:
+  - `name`: Waterbody name (may be null)
+  - `type`: Lake, pond, reservoir, etc.
+  - `area_sqkm`: Polygon area in square kilometres (UTM 18N)
+  - `data_source`: "Fairfax County GIS"
+- **Usage**: Filled with type-based colour palette; outline colour configurable in `layers.ts`
+
+### Fairfax Perennial Streams
+
+- **Source**: `OpenData_S14` ArcGIS layer (perennial streams)
+- **Layer ID**: `perennial_streams`
+- **Key fields**:
+  - `name`: Stream name (if provided)
+  - `feature_type` / `feature_code`: Fairfax classification codes
+  - `length_km`: Calculated segment length in kilometres
+  - `data_source`: "Fairfax County GIS"
+- **Usage**: Styled as deep blue linework to complement the more detailed water lines layer
+
+### Quality Checks
+
+- Run the scripts and verify outputs with `ogrinfo data/processed/fairfax_water_lines.gpkg -al -so`
+- Inspect attribute distributions in QGIS (length/area histograms)
+- Compare against basemap imagery to confirm alignment
+
+> **Tip**: Swap dataset URLs in the download script to bring in a different county or state dataset. Ensure you update the layer IDs in `prepare_fairfax_hydro.py` if the service exposes different names.

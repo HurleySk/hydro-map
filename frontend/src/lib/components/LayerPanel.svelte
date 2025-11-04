@@ -4,7 +4,7 @@
 
 	const layerGroups: Record<string, string[]> = {
 		'Terrain': ['hillshade', 'slope', 'aspect', 'contours'],
-		'Hydrology': ['streams-nhd', 'streams-dem', 'twi'],
+		'Hydrology': ['twi', 'fairfax-water-lines', 'fairfax-water-polys', 'perennial-streams'],
 		'Reference': ['huc12-outline', 'geology']
 	};
 
@@ -12,12 +12,13 @@
 		hillshade: 'Hillshade',
 		slope: 'Slope',
 		aspect: 'Aspect',
-		'streams-nhd': 'Real Streams',
-		'streams-dem': 'Drainage Network',
 		'twi': 'Topographic Wetness Index',
 		geology: 'Geology',
 		contours: 'Contours',
-		'huc12-outline': 'HUC12 Watersheds'
+		'huc12-outline': 'HUC12 Watersheds',
+		'fairfax-water-lines': 'Fairfax Water Features (Lines)',
+		'fairfax-water-polys': 'Fairfax Water Features (Polygons)',
+		'perennial-streams': 'Fairfax Perennial Streams'
 	};
 
 	function toggleLayer(layerId: string) {
@@ -41,7 +42,7 @@
 	}
 
 	function toggleGroup(groupName: string) {
-		const key = groupName.toLowerCase() as 'terrain' | 'hydrology' | 'reference';
+		const key = groupName.toLowerCase().replace(' ', '-') as 'terrain' | 'hydrology' | 'reference';
 		layerGroupStates.update(states => ({
 			...states,
 			[key]: !states[key]
@@ -53,7 +54,7 @@
 	<h3>Layers</h3>
 
 	{#each Object.entries(layerGroups) as [groupName, groupLayers]}
-		{@const groupKey = groupName.toLowerCase()}
+		{@const groupKey = groupName.toLowerCase().replace(' ', '-')}
 		{@const isExpanded = $layerGroupStates[groupKey]}
 		<div class="layer-group">
 			<button
