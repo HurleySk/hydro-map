@@ -16,7 +16,6 @@ An interactive web application for exploring hydrological and geological feature
 - **Terrain Analysis**: Toggle hillshade, slope, aspect, and contour visualizations derived from the DEM.
 - **Cross-Section Tool**: Draw a line to generate elevation profiles with distance metrics, sample counts, and geology contact totals.
 - **Feature Queries**: Inspect geology context, watershed membership, and DEM samples with an adjustable search buffer and structured warnings for data limitations.
-- **Dataset Health Monitoring**: API endpoint (`/api/feature-info/status`) for checking data availability and integrity of all datasets.
 - **Dynamic Legends**: Auto-display legends for TWI and geology layers, synced with layer visibility and opacity.
 - **Tile Health Monitoring**: Built-in tile status panel reports coverage, reachability, and max zoom for every PMTiles source.
 - **Colorblind Accessible**: Geology layer features distinct texture patterns alongside colors for red/green colorblind users.
@@ -76,7 +75,13 @@ python scripts/download_fairfax_hydro.py
 # 3. Prepare Fairfax hydro layers (normalize fields, add metrics)
 python scripts/prepare_fairfax_hydro.py
 
-# 4. Generate PMTiles (terrain, geology, Fairfax hydrology, contours)
+# 4. Download Fairfax stormwater overlays (floodplain + inadequate outfalls)
+python scripts/download_fairfax_stormwater.py
+
+# 5. Prepare Fairfax stormwater layers
+python scripts/prepare_fairfax_stormwater.py
+
+# 6. Generate PMTiles (terrain, Fairfax datasets, contours, geology if present)
 python scripts/generate_tiles.py --data-dir data/processed --output-dir data/tiles --max-zoom 17
 ```
 
@@ -98,7 +103,7 @@ npm run dev
 # Frontend runs on http://localhost:5173
 ```
 
-Open http://localhost:5173 in your browser. The map boots focused on San Francisco, CA (default location); adjust `mapView` in local storage or `DEFAULT_CENTER` in `frontend/src/lib/stores.ts` if your study area differs.
+Open http://localhost:5173 in your browser. The map boots focused on San Francisco, CA (default location); adjust the persisted `mapView` store or the `DEFAULT_MAP_VIEW` constant in `frontend/src/lib/stores.ts` if your study area differs.
 
 **Docker Option:**
 ```bash
@@ -136,7 +141,7 @@ Results are cached by location for fast repeated queries.
 Click **Feature Info** mode and click the map to inspect nearby features:
 - **Geology**: Rock type, formation, age, and data source
 - **Watershed context**: Fairfax County watershed name, area, and web link (if available)
-- **DEM Samples**: Elevation, slope, aspect, TWI at the clicked location
+- **DEM Samples**: Elevation, slope, and aspect at the clicked location
 
 ### Tile Status
 
@@ -152,7 +157,6 @@ See [docs/API.md](docs/API.md) for complete API documentation with schemas and e
 - `GET /api/delineate/status` - Check data file availability
 - `POST /api/cross-section` - Generate elevation profiles
 - `POST /api/feature-info` - Query geology, watershed, and DEM sample attributes
-- `GET /api/feature-info/status` - Dataset health check with metadata
 - `GET /tiles/{filename}` - PMTiles serving with range request support
 
 ## Configuration

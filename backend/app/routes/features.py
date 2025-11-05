@@ -198,6 +198,13 @@ async def get_feature_info(request: FeatureInfoRequest):
         if geology_features:
             features["geology"] = geology_features
 
+    # Query inadequate outfalls
+    if "inadequate-outfalls" in layers_to_query:
+        outfalls_features, warnings = await query_inadequate_outfalls(point, request.buffer)
+        all_warnings.extend(warnings)
+        if outfalls_features:
+            features["inadequate_outfalls"] = outfalls_features
+
     # Query Fairfax watersheds (always query - provides useful context)
     watersheds_data, warnings = await query_fairfax_watersheds(point)
     all_warnings.extend(warnings)
@@ -574,6 +581,174 @@ async def query_geology(point: Point, buffer_m: float) -> tuple[Optional[List[Di
         warning_msg = f"Failed to query geology: {e}"
         print(f"Warning: {warning_msg}")
         warnings.append({"level": "error", "message": warning_msg, "source": "query_geology"})
+        return None, warnings
+
+
+async def query_inadequate_outfalls(point: Point, buffer_m: float) -> tuple[Optional[List[Dict]], List[Dict]]:
+    """
+    Query inadequate outfalls features at a point.
+
+    Uses two-stage approach:
+    1. Check if point is contained in any drainage area polygon
+    2. If not, find nearest drainage areas within buffer using spatial index
+
+    Args:
+        point: Shapely Point in WGS84
+        buffer_m: Buffer distance in meters
+
+    Returns:
+        Tuple of (list of inadequate outfall feature dictionaries or None, list of warnings)
+    """
+    warnings = []
+
+    # Get path from LAYER_DATASET_MAP
+    if "inadequate-outfalls" not in settings.LAYER_DATASET_MAP:
+        warning_msg = "Inadequate outfalls layer not configured"
+        warnings.append({"level": "error", "message": warning_msg, "source": "query_inadequate_outfalls"})
+        return None, warnings
+
+    outfalls_path_str, layer_name = settings.LAYER_DATASET_MAP["inadequate-outfalls"]
+    outfalls_path = Path(outfalls_path_str)
+
+    if not outfalls_path.exists():
+        warning_msg = f"Inadequate outfalls dataset not found at {outfalls_path}"
+        print(f"Warning: {warning_msg}")
+        warnings.append({"level": "error", "message": warning_msg, "source": "query_inadequate_outfalls"})
+        return None, warnings
+
+    try:
+        # Read inadequate outfalls (with caching)
+        outfalls_gdf = _load_dataset_cached(str(outfalls_path), layer_name)
+        if outfalls_gdf is None:
+            warnings.append({"level": "error", "message": "Failed to load inadequate outfalls dataset", "source": "query_inadequate_outfalls"})
+            return None, warnings
+
+        # Ensure same CRS
+        if outfalls_gdf.crs != "EPSG:4326":
+            outfalls_gdf = outfalls_gdf.to_crs("EPSG:4326")
+
+        features = []
+
+        # FIRST: Find all polygons that CONTAIN the click point (with spatial index)
+        if hasattr(outfalls_gdf, 'sindex') and outfalls_gdf.sindex is not None:
+            possible_matches_idx = list(outfalls_gdf.sindex.intersection(point.bounds))
+            candidates = outfalls_gdf.iloc[possible_matches_idx]
+        else:
+            candidates = outfalls_gdf
+
+        containing = candidates[candidates.contains(point)]
+
+        if len(containing) > 0:
+            # If multiple polygons contain the point, prefer the smallest (most specific drainage area)
+            containing_proj = containing.to_crs("EPSG:6933")  # Equal Earth for area calculation
+            containing_areas = containing_proj.area
+
+            for idx, row in containing.iterrows():
+                area_sqm = containing_areas.loc[idx]
+
+                # Extract fields from the data
+                outfall_id = str(row.get('INADEQUATE_OUTFALL_ID', row.get('inadequate_outfall_id', 'Unknown')))
+                determination = str(row.get('DETERMINATION', row.get('determination', 'Unknown')))
+                drainage_area_sqkm = float(row.get('DRAINAGE_AREA', row.get('drainage_area', 0.0)))
+                watershed = str(row.get('WATERSHED', row.get('watershed', 'Unknown')))
+                data_source = str(row.get('DATA_SOURCE', row.get('data_source', 'Unknown')))
+
+                feature = {
+                    "type": "inadequate_outfall",
+                    "outfall_id": outfall_id,
+                    "determination": determination,
+                    "drainage_area_sqkm": round(drainage_area_sqkm, 2),
+                    "watershed": watershed,
+                    "data_source": data_source,
+                    "distance_meters": 0.0,
+                    "precision": "exact",
+                    "is_nearest": False,
+                    "source": "inadequate_outfalls.gpkg",
+                    "_area_sqm": area_sqm  # Internal use for sorting
+                }
+                features.append(feature)
+
+            # Sort by area (smallest first) - show smaller, more specific drainage areas first
+            features.sort(key=lambda x: x['_area_sqm'])
+
+            # Remove internal area field - return ALL containing polygons
+            for f in features:
+                del f['_area_sqm']
+            # Return all features (drainage areas can overlap, unlike geology)
+
+        else:
+            # SECOND: If no polygon contains the point, use spatial query with fallback
+            matching_gdf, is_nearest = query_features_with_fallback(
+                outfalls_gdf, point, buffer_m, max_distance_m=250
+            )
+
+            if len(matching_gdf) == 0:
+                warnings.append({"level": "info", "message": "No inadequate outfalls found within 250m", "source": "query_inadequate_outfalls"})
+                return None, warnings
+
+            # Add warning if nearest-feature fallback was used
+            if is_nearest:
+                warnings.append({
+                    "level": "info",
+                    "message": f"No inadequate outfalls in buffer ({buffer_m}m), showing nearest within 250m",
+                    "source": "query_inadequate_outfalls"
+                })
+
+            for idx, row in matching_gdf.iterrows():
+                polygon_geom = row.geometry
+
+                # Calculate distance to boundary
+                nearest_pt_on_boundary, _ = nearest_points(polygon_geom.boundary, point)
+                distance = calculate_distance_meters(point, nearest_pt_on_boundary)
+
+                # Extract fields from the data
+                outfall_id = str(row.get('INADEQUATE_OUTFALL_ID', row.get('inadequate_outfall_id', 'Unknown')))
+                determination = str(row.get('DETERMINATION', row.get('determination', 'Unknown')))
+                drainage_area_sqkm = float(row.get('DRAINAGE_AREA', row.get('drainage_area', 0.0)))
+                watershed = str(row.get('WATERSHED', row.get('watershed', 'Unknown')))
+                data_source = str(row.get('DATA_SOURCE', row.get('data_source', 'Unknown')))
+                distance_rounded = round(distance, 1)
+
+                # Determine precision based on distance
+                if distance_rounded == 0:
+                    precision = "exact"
+                elif distance_rounded < 10:
+                    precision = "near_boundary"
+                else:
+                    precision = "approximate"
+
+                feature = {
+                    "type": "inadequate_outfall",
+                    "outfall_id": outfall_id,
+                    "determination": determination,
+                    "drainage_area_sqkm": round(drainage_area_sqkm, 2),
+                    "watershed": watershed,
+                    "data_source": data_source,
+                    "distance_meters": distance_rounded,
+                    "precision": precision,
+                    "is_nearest": is_nearest,
+                    "source": "inadequate_outfalls.gpkg"
+                }
+                features.append(feature)
+
+            # Sort by distance, closest first
+            features.sort(key=lambda x: x['distance_meters'])
+
+            # Limit to top 3 closest features
+            if len(features) > 3:
+                warnings.append({
+                    "level": "info",
+                    "message": f"Found {len(features)} inadequate outfalls, showing closest 3",
+                    "source": "query_inadequate_outfalls"
+                })
+                features = features[:3]
+
+        return features if features else None, warnings
+
+    except Exception as e:
+        warning_msg = f"Failed to query inadequate outfalls: {e}"
+        print(f"Warning: {warning_msg}")
+        warnings.append({"level": "error", "message": warning_msg, "source": "query_inadequate_outfalls"})
         return None, warnings
 
 

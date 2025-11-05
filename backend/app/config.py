@@ -25,7 +25,8 @@ class Settings(BaseSettings):
         "geology": ("../data/processed/geology.gpkg", None),
         "fairfax-watersheds": ("../data/processed/fairfax_watersheds.gpkg", "fairfax_watersheds"),
         "fairfax-water-lines": ("../data/processed/fairfax_water_lines.gpkg", "fairfax_water_lines"),
-        "fairfax-water-polys": ("../data/processed/fairfax_water_polys.gpkg", "fairfax_water_polys")
+        "fairfax-water-polys": ("../data/processed/fairfax_water_polys.gpkg", "fairfax_water_polys"),
+        "inadequate-outfalls": ("../data/raw/fairfax/inadequate_outfalls.gpkg", "inadequate_outfalls")
     }
 
     # Watershed delineation settings

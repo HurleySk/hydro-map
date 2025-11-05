@@ -27,8 +27,16 @@ data/raw/*
 !data/raw/.gitkeep
 data/processed/*.tif
 data/processed/*.tiff
+data/processed/*.gpkg
+data/processed/*.geojson
+data/processed/*.shp
+data/processed/*.shx
+data/processed/*.dbf
+data/processed/*.prj
+data/processed/*.cpg
 data/tiles/*.pmtiles
 data/tiles/*.mbtiles
+data/tiles/*.geojson
 
 # Local review docs (ignore assessment drafts)
 docs/review/
@@ -68,12 +76,6 @@ tmp/
 temp/
 *.tmp
 tmp_*
-# Large processed datasets (kept locally)
-data/processed/dem/*.tif
-data/processed/contours.gpkg
-data/tiles/*.geojson
-data/tiles/*.pmtiles
-data/tiles/*.mbtiles
 data/tiles/temp_tiles/
 # Allow placeholder keep files
 !data/processed/.gitkeep

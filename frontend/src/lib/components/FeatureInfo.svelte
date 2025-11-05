@@ -40,6 +40,11 @@
 			// Always query geology (provides important context even if layer is hidden)
 			layersToQuery.push('geology');
 
+			// Query inadequate outfalls if layer is visible
+			if (layersState['inadequate-outfalls']?.visible) {
+				layersToQuery.push('inadequate-outfalls');
+			}
+
 			queriedLayers = layersToQuery;
 
 			const response = await fetch('/api/feature-info', {
@@ -84,9 +89,23 @@
 
 	function formatLayerName(layerId: string): string {
 		const layerNames: Record<string, string> = {
-			'geology': 'Geology'
+			'geology': 'Geology',
+			'inadequate-outfalls': 'Inadequate Outfalls'
 		};
 		return layerNames[layerId] || layerId;
+	}
+
+	function getDeterminationColor(determination: string): string {
+		// Okabe-Ito colorblind-safe palette (matching patterns.ts)
+		const colors: Record<string, string> = {
+			'Erosion': '#E69F00',
+			'Vertical Erosion': '#D55E00',
+			'Left Bank Unstable': '#56B4E9',
+			'Right Bank Unstable': '#0072B2',
+			'Left and Right Bank Unstable': '#009E73',
+			'Habitat Score': '#F0E442'
+		};
+		return colors[determination] || '#9ca3af';
 	}
 </script>
 
@@ -203,6 +222,50 @@
 						{/if}
 						{#if geo.description}
 							<div class="feature-description">{geo.description}</div>
+						{/if}
+					</div>
+				{/each}
+			</div>
+		{/if}
+
+		{#if features.inadequate_outfalls}
+			<div class="feature-group">
+				<h4>Inadequate Outfalls</h4>
+				{#each features.inadequate_outfalls as outfall}
+					<div class="feature-item">
+						<div class="feature-name">{outfall.outfall_id}</div>
+
+						{#if outfall.determination}
+							<div class="determination-badge" style="background: {getDeterminationColor(outfall.determination)}">
+								{outfall.determination}
+							</div>
+						{/if}
+
+						{#if outfall.distance_meters !== undefined}
+							<div class="feature-distance">
+								{#if outfall.distance_meters === 0}
+									Within this drainage area
+								{:else if outfall.is_nearest}
+									Nearest outfall area ({outfall.distance_meters}m away)
+								{:else}
+									Distance to boundary: {outfall.distance_meters}m
+								{/if}
+								{#if outfall.precision}
+									<span class="precision-badge">({outfall.precision})</span>
+								{/if}
+							</div>
+						{/if}
+
+						{#if outfall.drainage_area_sqkm}
+							<div class="feature-attr">Drainage Area: {outfall.drainage_area_sqkm} km²</div>
+						{/if}
+
+						{#if outfall.watershed}
+							<div class="feature-attr">Watershed: {outfall.watershed}</div>
+						{/if}
+
+						{#if outfall.data_source}
+							<div class="feature-attr">Source: {outfall.data_source}</div>
 						{/if}
 					</div>
 				{/each}
@@ -400,5 +463,15 @@
 		color: #64748b;
 		font-style: italic;
 		margin-left: 0.25rem;
+	}
+
+	.determination-badge {
+		display: inline-block;
+		padding: 0.25rem 0.5rem;
+		color: #1e293b;
+		border-radius: 0.25rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		margin-bottom: 0.5rem;
 	}
 </style>

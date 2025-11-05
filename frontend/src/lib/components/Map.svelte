@@ -64,6 +64,9 @@ let mapReady = false; // Track when map is fully initialized
 let styleReady = false; // Track when style graph is ready
 let updateQueue: Array<{ type: string; data: any }> = []; // Queue for updates before style ready
 
+	// State for interactive highlighting of outfall points and polygons
+	let highlightedOutfallId: string | null = null;
+
 type TileHeaderBounds = {
 	minLon: number;
 	minLat: number;
@@ -301,6 +304,9 @@ function headerToBounds(header: any): TileHeaderBounds {
 			// Add custom sources and layers to the loaded Stadia style
 			addCustomSourcesAndLayers();
 
+			// Setup outfall highlight handlers after layers are added
+			setupOutfallHighlightHandlers();
+
 			styleReady = true;
 			mapReady = true;
 			processUpdateQueue();
@@ -421,7 +427,7 @@ function headerToBounds(header: any): TileHeaderBounds {
 						layout: {
 							visibility: 'none',
 							'text-field': ['get', 'name'],
-							'text-font': ['Noto Sans Regular'],
+							'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
 							'text-size': [
 								'interpolate',
 								['linear'],
@@ -518,6 +524,45 @@ function headerToBounds(header: any): TileHeaderBounds {
 							'line-color': layer.paintProperties?.['line-color'],
 							'line-width': layer.paintProperties?.['line-width'] || 0.75,
 							'line-opacity': layer.paintProperties?.['line-opacity'] || 0.8
+						}
+					}
+				);
+			} else if (layer.id === 'inadequate-outfall-points') {
+				// Special handling for inadequate outfall points (circle + labels)
+				configuredLayers.push(
+					{
+						id: 'inadequate-outfall-points-circle',
+						type: 'circle',
+						source: 'inadequate-outfall-points',
+						'source-layer': 'inadequate_outfall_points',
+						layout: { visibility: layer.defaultVisible ? 'visible' : 'none' },
+						paint: layer.paintProperties || {
+							'circle-color': '#dc2626',
+							'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 3, 14, 5, 17, 7],
+							'circle-opacity': 0.9,
+							'circle-stroke-color': '#7f1d1d',
+							'circle-stroke-width': 1
+						}
+					},
+					{
+						id: 'inadequate-outfall-points-labels',
+						type: 'symbol',
+						source: 'inadequate-outfall-points',
+						'source-layer': 'inadequate_outfall_points',
+						minzoom: 13,
+						layout: {
+							visibility: layer.defaultVisible ? 'visible' : 'none',
+							'text-field': ['get', 'outfall_id'],
+							'text-font': ['Open Sans Regular', 'Arial Unicode MS Regular'],
+							'text-size': 11,
+							'text-offset': [0, 1.2],
+							'text-anchor': 'top',
+							'text-allow-overlap': false
+						},
+						paint: {
+							'text-color': '#1f2937',
+							'text-halo-color': '#ffffff',
+							'text-halo-width': 2
 						}
 					}
 				);
@@ -631,7 +676,12 @@ function headerToBounds(header: any): TileHeaderBounds {
 		// Add custom layers
 		const customLayers = buildLayersFromConfig();
 		for (const layer of customLayers) {
-			map.addLayer(layer);
+			try {
+				map.addLayer(layer);
+				logger.log(`[addCustomSourcesAndLayers] Added layer: ${layer.id}`);
+			} catch (error) {
+				logger.error(`[addCustomSourcesAndLayers] Failed to add layer ${layer.id}:`, error);
+			}
 		}
 
 		// Add watershed visualization layers
@@ -803,6 +853,138 @@ function headerToBounds(header: any): TileHeaderBounds {
 		};
 	}
 
+	/**
+	 * Setup interactive highlighting for inadequate outfall points and polygons
+	 * Clicking a point highlights the corresponding polygon and vice versa
+	 */
+	function setupOutfallHighlightHandlers() {
+		if (!map) return;
+
+		// Click handler for outfall points - highlight corresponding polygon
+		map.on('click', 'inadequate-outfall-points-circle', (e) => {
+			if (e.features && e.features.length > 0) {
+				const feature = e.features[0];
+				const outfallId = feature.properties?.outfall_id;
+
+				if (outfallId) {
+					highlightOutfallById(outfallId);
+				}
+			}
+		});
+
+		// Click handler for outfall polygons - highlight corresponding point
+		map.on('click', 'inadequate-outfalls-fill', (e) => {
+			if (e.features && e.features.length > 0) {
+				const feature = e.features[0];
+				const outfallId = feature.properties?.outfall_id;
+
+				if (outfallId) {
+					highlightOutfallById(outfallId);
+				}
+			}
+		});
+
+		// Clear highlights on background click
+		map.on('click', (e) => {
+			const features = map.queryRenderedFeatures(e.point, {
+				layers: ['inadequate-outfall-points-circle', 'inadequate-outfalls-fill']
+			});
+
+			// Only clear if we didn't click on an outfall feature
+			if (features.length === 0 && highlightedOutfallId) {
+				clearOutfallHighlight();
+			}
+		});
+
+		// Change cursor to pointer when hovering over outfall features
+		map.on('mouseenter', 'inadequate-outfall-points-circle', () => {
+			map.getCanvas().style.cursor = 'pointer';
+		});
+		map.on('mouseleave', 'inadequate-outfall-points-circle', () => {
+			map.getCanvas().style.cursor = '';
+		});
+		map.on('mouseenter', 'inadequate-outfalls-fill', () => {
+			map.getCanvas().style.cursor = 'pointer';
+		});
+		map.on('mouseleave', 'inadequate-outfalls-fill', () => {
+			map.getCanvas().style.cursor = '';
+		});
+	}
+
+	/**
+	 * Highlight an outfall (both point and polygon) by ID
+	 */
+	function highlightOutfallById(outfallId: string) {
+		// Clear previous highlight
+		clearOutfallHighlight();
+
+		// Set new highlight
+		highlightedOutfallId = outfallId;
+
+		// Update filters to highlight matching features
+		const pointFilter = ['==', ['get', 'outfall_id'], outfallId];
+		const polygonFilter = ['==', ['get', 'outfall_id'], outfallId];
+
+		// Add temporary highlight layers
+		if (!map.getLayer('inadequate-outfall-points-highlight')) {
+			map.addLayer({
+				id: 'inadequate-outfall-points-highlight',
+				type: 'circle',
+				source: 'inadequate-outfall-points',
+				'source-layer': 'inadequate_outfall_points',
+				filter: pointFilter,
+				paint: {
+					'circle-color': '#fbbf24',
+					'circle-radius': ['interpolate', ['linear'], ['zoom'], 10, 5, 14, 8, 17, 11],
+					'circle-opacity': 1,
+					'circle-stroke-color': '#f59e0b',
+					'circle-stroke-width': 2
+				}
+			});
+		} else {
+			map.setFilter('inadequate-outfall-points-highlight', pointFilter);
+			map.setLayoutProperty('inadequate-outfall-points-highlight', 'visibility', 'visible');
+		}
+
+		if (!map.getLayer('inadequate-outfalls-highlight')) {
+			map.addLayer({
+				id: 'inadequate-outfalls-highlight',
+				type: 'line',
+				source: 'inadequate-outfalls',
+				'source-layer': 'inadequate_outfalls',
+				filter: polygonFilter,
+				paint: {
+					'line-color': '#fbbf24',
+					'line-width': 3,
+					'line-opacity': 1
+				}
+			});
+		} else {
+			map.setFilter('inadequate-outfalls-highlight', polygonFilter);
+			map.setLayoutProperty('inadequate-outfalls-highlight', 'visibility', 'visible');
+		}
+
+		logger.log(`[Outfall Highlight] Highlighted outfall ID: ${outfallId}`);
+	}
+
+	/**
+	 * Clear all outfall highlights
+	 */
+	function clearOutfallHighlight() {
+		if (!highlightedOutfallId) return;
+
+		// Hide highlight layers
+		if (map.getLayer('inadequate-outfall-points-highlight')) {
+			map.setLayoutProperty('inadequate-outfall-points-highlight', 'visibility', 'none');
+		}
+		if (map.getLayer('inadequate-outfalls-highlight')) {
+			map.setLayoutProperty('inadequate-outfalls-highlight', 'visibility', 'none');
+		}
+
+		logger.log(`[Outfall Highlight] Cleared highlight for outfall ID: ${highlightedOutfallId}`);
+		highlightedOutfallId = null;
+	}
+
 	// Safe layer applier with retries
 	function applyLayerState(layersState: any, retryCount = 0) {
 		logger.log('[applyLayerState] Called with state:', layersState);
@@ -825,6 +1007,10 @@ function headerToBounds(header: any): TileHeaderBounds {
 			}
 			// Skip inadequate-outfalls-fill and inadequate-outfalls-outline as they're controlled by 'inadequate-outfalls'
 			if (layerId === 'inadequate-outfalls-fill' || layerId === 'inadequate-outfalls-outline') {
+				return;
+			}
+			// Skip inadequate-outfall-points-circle and inadequate-outfall-points-labels as they're controlled by 'inadequate-outfall-points'
+			if (layerId === 'inadequate-outfall-points-circle' || layerId === 'inadequate-outfall-points-labels') {
 				return;
 			}
 
@@ -873,6 +1059,32 @@ function headerToBounds(header: any): TileHeaderBounds {
 					if (config.visible && config.opacity !== undefined) {
 						map.setPaintProperty('inadequate-outfalls-outline', 'line-opacity', config.opacity * 0.8);
 					}
+				}
+				return;
+			}
+
+			if (layerId === 'inadequate-outfall-points') {
+				const newVisibility = config.visible ? 'visible' : 'none';
+				logger.log(`[applyLayerState] Setting inadequate outfall points layers visibility to ${newVisibility}`);
+
+				const pointsCircle = map.getLayer('inadequate-outfall-points-circle');
+				const pointsLabels = map.getLayer('inadequate-outfall-points-labels');
+
+				logger.log(`[applyLayerState] Layer lookup - circle: ${pointsCircle ? 'found' : 'NOT FOUND'}, labels: ${pointsLabels ? 'found' : 'NOT FOUND'}`);
+
+				if (pointsCircle) {
+					map.setLayoutProperty('inadequate-outfall-points-circle', 'visibility', newVisibility);
+					// Apply opacity to circle
+					if (config.visible && config.opacity !== undefined) {
+						map.setPaintProperty('inadequate-outfall-points-circle', 'circle-opacity', config.opacity);
+					}
+				} else {
+					logger.warn(`[applyLayerState] inadequate-outfall-points-circle not found, adding to retry queue`);
+					pendingLayers.push(layerId);
+				}
+				if (pointsLabels) {
+					map.setLayoutProperty('inadequate-outfall-points-labels', 'visibility', newVisibility);
+					// Labels always at full opacity for readability
 				}
 				return;
 			}
@@ -1033,6 +1245,9 @@ function updateBasemap(style: BasemapStyle) {
 	map.once('style.load', () => {
 		logger.log('Basemap style loaded, re-adding custom layers');
 		addCustomSourcesAndLayers();
+
+		// Setup outfall highlight handlers after layers are added
+		setupOutfallHighlightHandlers();
 
 		// Restore view state
 		map.setCenter(center);
