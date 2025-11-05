@@ -79,3 +79,19 @@ data/tiles/temp_tiles/
 # Allow placeholder keep files
 !data/processed/.gitkeep
 !data/tiles/.gitkeep
+data/processed/dem/aspect_deg.tif
+data/processed/dem/aspect_old.tif
+data/processed/dem/aspect.tif
+data/processed/dem/dem_utm_1m.tif
+data/processed/dem/filled_dem.tif
+data/processed/dem/flow_accumulation.tif
+data/processed/dem/flow_direction.tif
+data/processed/dem/hillshade_old.tif
+data/processed/dem/hillshade.tif
+data/processed/dem/slope_deg.tif
+data/processed/dem/slope_old.tif
+data/processed/dem/slope_wgs84.tif
+data/processed/dem/slope.tif
+data/processed/dem/twi_8bit.tif
+data/processed/dem/twi_color.tif
+data/processed/dem/twi.tif
